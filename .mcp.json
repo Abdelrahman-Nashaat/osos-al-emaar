@@ -1,0 +1,28 @@
+{
+  "mcpServers": {
+    "playwright": {
+      "type": "stdio",
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@playwright/mcp@latest"
+      ],
+      "env": {}
+    },
+    "supabase": {
+      "type": "http",
+      "url": "https://mcp.supabase.com/mcp"
+    },
+    "github": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "headersHelper": "powershell -NoProfile -Command \"$gh = 'C:\\Users\\WindowS 10\\AppData\\Local\\Programs\\GitHub CLI\\bin\\gh.exe'; $t = & $gh auth token 2>$null; if ($LASTEXITCODE -eq 0 -and $t) { $token = $t.Trim(); Write-Output ('{\\\"Authorization\\\":\\\"Bearer ' + $token + '\\\"}') } else { Write-Output '{}' }\""
+    },
+    "vercel": {
+      "type": "http",
+      "url": "https://mcp.vercel.com"
+    }
+  }
+}
