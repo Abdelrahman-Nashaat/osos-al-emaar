@@ -25,6 +25,20 @@ async function requireManager(): Promise<SessionProfile | null> {
   return session;
 }
 
+/** True when no OTHER active manager exists besides `excludeUserId`. */
+async function isLastActiveManager(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  excludeUserId: string,
+): Promise<boolean> {
+  const { count } = await supabase
+    .from("profiles")
+    .select("id", { count: "exact", head: true })
+    .eq("role", "manager")
+    .eq("is_active", true)
+    .neq("id", excludeUserId);
+  return (count ?? 0) === 0;
+}
+
 export async function createTeamMember(
   _prev: ActionState,
   formData: FormData,
@@ -88,6 +102,19 @@ export async function setMemberRole(userId: string, role: Role): Promise<ActionS
   if (!ROLES.includes(role)) return { error: "دور غير صالح." };
 
   const supabase = await createClient();
+
+  // Never let the office demote its last active manager (lock-out protection).
+  if (role !== "manager") {
+    const { data: target } = await supabase
+      .from("profiles")
+      .select("role, is_active")
+      .eq("id", userId)
+      .single();
+    if (target?.role === "manager" && target.is_active && (await isLastActiveManager(supabase, userId))) {
+      return { error: "لا يمكن إزالة آخر مدير عام نشط." };
+    }
+  }
+
   const { error } = await supabase.from("profiles").update({ role }).eq("id", userId);
   if (error) return { error: "تعذّر تحديث الدور." };
 
@@ -107,6 +134,19 @@ export async function setMemberActive(userId: string, isActive: boolean): Promis
   if (!session) return { error: "غير مصرّح." };
 
   const supabase = await createClient();
+
+  // Never let the office deactivate its last active manager (lock-out protection).
+  if (!isActive) {
+    const { data: target } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", userId)
+      .single();
+    if (target?.role === "manager" && (await isLastActiveManager(supabase, userId))) {
+      return { error: "لا يمكن تعطيل آخر مدير عام نشط." };
+    }
+  }
+
   const { error } = await supabase.from("profiles").update({ is_active: isActive }).eq("id", userId);
   if (error) return { error: "تعذّر تحديث الحالة." };
 
