@@ -15,6 +15,7 @@ import { ProjectFormDialog } from "../project-form";
 import { ProjectMembersEditor } from "../project-members-editor";
 import { ProjectFinancialsCard } from "../project-financials-card";
 import { DeleteProjectButton } from "../delete-project-button";
+import { ProjectTasksCard } from "./project-tasks-card";
 
 export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -27,6 +28,8 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   const canEdit = can(perms, "projects.edit");
   const showFinancials = can(perms, "financials.view");
   const isManager = session.profile.role === "manager";
+  const canViewTasks = can(perms, "tasks.view");
+  const canAssignTasks = can(perms, "tasks.assign");
 
   const supabase = await createClient();
 
@@ -57,23 +60,47 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     client = data ?? null;
   }
 
-  // Assigned members — resolve names via a separate profiles read (avoids the
-  // two-FK embed ambiguity on project_members). profiles is team-readable (0005).
+  // Assigned members.
   const { data: memberRows } = await supabase
     .from("project_members")
     .select("user_id")
     .eq("project_id", id);
   const memberIds = (memberRows ?? []).map((m) => m.user_id);
-  let members: { user_id: string; full_name: string; role: string }[] = [];
-  if (memberIds.length) {
-    const { data: directory } = await supabase.rpc("team_directory");
-    const byId = new Map((directory ?? []).map((p) => [p.id, p] as const));
-    members = memberIds.map((uid) => ({
-      user_id: uid,
-      full_name: byId.get(uid)?.full_name ?? "—",
-      role: byId.get(uid)?.role ?? "",
-    }));
+
+  // Project tasks — operational, shown to anyone with tasks.view (no amounts).
+  let taskRows: {
+    id: string;
+    title: string;
+    status: import("@/lib/tasks/status").TaskStatus;
+    priority: import("@/lib/tasks/status").TaskPriority;
+    due_at: string | null;
+    current_assignee_id: string | null;
+  }[] = [];
+  if (canViewTasks) {
+    const { data } = await supabase
+      .from("tasks")
+      .select("id, title, status, priority, due_at, current_assignee_id")
+      .eq("project_id", id)
+      .order("created_at", { ascending: false });
+    taskRows = data ?? [];
   }
+
+  // Names-only directory — fetched ONCE and reused for member names, task-assignee
+  // names, and the edit/assign pickers (profiles has multiple FKs → no embed).
+  let directory:
+    | { id: string; full_name: string; role: string; is_active: boolean }[]
+    | null = null;
+  if (memberIds.length > 0 || canEdit || canViewTasks) {
+    const { data } = await supabase.rpc("team_directory");
+    directory = data;
+  }
+  const byId = new Map((directory ?? []).map((p) => [p.id, p] as const));
+
+  const members = memberIds.map((uid) => ({
+    user_id: uid,
+    full_name: byId.get(uid)?.full_name ?? "—",
+    role: byId.get(uid)?.role ?? "",
+  }));
 
   // Financials — fetched ONLY when allowed. Engineers never reach this branch,
   // so no amount is ever read or sent to them.
@@ -91,15 +118,27 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   const assignable: { id: string; full_name: string; role: string }[] = [];
   let clientOptions: { id: string; name: string }[] = [];
   if (canEdit) {
-    const [{ data: directory }, { data: cs }] = await Promise.all([
-      supabase.rpc("team_directory"),
-      supabase.from("clients").select("id, name").order("name"),
-    ]);
+    const { data: cs } = await supabase.from("clients").select("id, name").order("name");
     for (const p of directory ?? []) {
       if (p.is_active) assignable.push({ id: p.id, full_name: p.full_name, role: p.role });
     }
     clientOptions = cs ?? [];
   }
+
+  // Task-section data: assignee names + the active-engineer picker (tasks.assign only).
+  const projectTasks = taskRows.map((t) => ({
+    id: t.id,
+    title: t.title,
+    status: t.status,
+    priority: t.priority,
+    due_at: t.due_at,
+    assignee_name: t.current_assignee_id ? (byId.get(t.current_assignee_id)?.full_name ?? null) : null,
+  }));
+  const taskEngineers = canAssignTasks
+    ? (directory ?? [])
+        .filter((p) => p.role === "engineer" && p.is_active)
+        .map((p) => ({ id: p.id, full_name: p.full_name }))
+    : [];
 
   const overdue = isOverdue(project.due_date, project.status);
 
@@ -215,6 +254,17 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           />
         </CardContent>
       </Card>
+
+      {/* Project tasks (operational) */}
+      {canViewTasks ? (
+        <ProjectTasksCard
+          projectId={project.id}
+          projectName={project.name}
+          tasks={projectTasks}
+          canCreate={canAssignTasks}
+          engineers={taskEngineers}
+        />
+      ) : null}
 
       {/* Financials — rendered ONLY for manager + accountant */}
       {showFinancials ? (

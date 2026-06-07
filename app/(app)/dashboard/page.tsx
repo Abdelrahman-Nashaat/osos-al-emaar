@@ -1,4 +1,9 @@
-import { requireAuth } from "@/lib/auth/permissions";
+import Link from "next/link";
+import { requireAuth, getEffectivePermissions } from "@/lib/auth/permissions";
+import { createClient } from "@/lib/supabase/server";
+import { can } from "@/lib/auth/permission-keys";
+import { isTaskOverdue, TASK_EVENT_LABELS } from "@/lib/tasks/status";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const ROLE_LABEL: Record<string, string> = {
   manager: "المدير العام",
@@ -7,20 +12,134 @@ const ROLE_LABEL: Record<string, string> = {
 };
 
 export default async function DashboardPage() {
-  const { profile } = await requireAuth();
+  const { profile, userId } = await requireAuth();
+  const perms = await getEffectivePermissions();
+  const isManager = profile.role === "manager";
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">مرحباً، {profile.full_name}</h1>
         <p className="text-sm text-muted-foreground">
           دورك في النظام: {ROLE_LABEL[profile.role] ?? profile.role}
         </p>
       </div>
-      <div className="rounded-lg border border-border bg-card p-6 text-sm text-muted-foreground">
-        لوحة التحكم قيد الإنشاء. ستظهر هنا إحصائيات المشاريع والمهام والمتأخرات ونشاط الفريق في
-        المراحل القادمة.
-      </div>
+
+      {can(perms, "tasks.view") ? (
+        <TaskWidgets userId={userId} isManager={isManager} />
+      ) : (
+        <div className="rounded-lg border border-border bg-card p-6 text-sm text-muted-foreground">
+          لوحة التحكم قيد الإنشاء. ستظهر هنا إحصائيات إضافية في المراحل القادمة.
+        </div>
+      )}
     </div>
+  );
+}
+
+async function TaskWidgets({ userId, isManager }: { userId: string; isManager: boolean }) {
+  const supabase = await createClient();
+
+  const { data: tasks } = await supabase
+    .from("tasks")
+    .select("id, title, status, priority, due_at, current_assignee_id");
+  const list = tasks ?? [];
+
+  const mineOpen = list.filter(
+    (t) =>
+      t.current_assignee_id === userId &&
+      (t.status === "assigned" || t.status === "in_progress"),
+  ).length;
+  const submitted = list.filter((t) => t.status === "submitted").length;
+  const urgentOpen = list.filter((t) => t.priority === "urgent" && t.status !== "closed").length;
+  const overdueAll = list.filter((t) => isTaskOverdue(t.due_at, t.status)).length;
+  const overdueMine = list.filter(
+    (t) => t.current_assignee_id === userId && isTaskOverdue(t.due_at, t.status),
+  ).length;
+
+  const stats = isManager
+    ? [
+        { label: "بانتظار المراجعة", value: submitted, href: "/tasks?filter=incomplete" },
+        { label: "مهام متأخرة", value: overdueAll, href: "/tasks?filter=incomplete", danger: true },
+        { label: "مهام عاجلة", value: urgentOpen, href: "/tasks?filter=urgent" },
+      ]
+    : [
+        { label: "مهامي المفتوحة", value: mineOpen, href: "/tasks?filter=mine" },
+        { label: "متأخرة عليّ", value: overdueMine, href: "/tasks?filter=mine", danger: true },
+        { label: "مهام عاجلة", value: urgentOpen, href: "/tasks?filter=urgent" },
+      ];
+
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-3 sm:grid-cols-3">
+        {stats.map((s) => (
+          <Link
+            key={s.label}
+            href={s.href}
+            className="rounded-lg border border-border bg-card p-4 transition-colors hover:bg-muted"
+          >
+            <div className="text-xs text-muted-foreground">{s.label}</div>
+            <div
+              className={
+                "mt-1 text-3xl font-bold tabular-nums" +
+                (s.danger && s.value > 0 ? " text-red-600 dark:text-red-400" : "")
+              }
+            >
+              {s.value}
+            </div>
+          </Link>
+        ))}
+      </div>
+
+      {isManager ? <RecentActivity titles={new Map(list.map((t) => [t.id, t.title]))} /> : null}
+    </div>
+  );
+}
+
+async function RecentActivity({ titles }: { titles: Map<string, string> }) {
+  const supabase = await createClient();
+  const [{ data: events }, { data: directory }] = await Promise.all([
+    supabase
+      .from("task_events")
+      .select("id, event_type, created_at, actor_id, task_id")
+      .order("created_at", { ascending: false })
+      .limit(6),
+    supabase.rpc("team_directory"),
+  ]);
+  const nameById = new Map((directory ?? []).map((p) => [p.id, p.full_name] as const));
+  const rows = events ?? [];
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">آخر النشاط</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {rows.length === 0 ? (
+          <p className="text-sm text-muted-foreground">لا يوجد نشاط بعد.</p>
+        ) : (
+          <ul className="space-y-2">
+            {rows.map((e) => (
+              <li key={e.id}>
+                <Link
+                  href={`/tasks/${e.task_id}`}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted"
+                >
+                  <span>
+                    <span className="font-medium">{TASK_EVENT_LABELS[e.event_type]}</span>
+                    <span className="text-muted-foreground">
+                      {" — "}
+                      {titles.get(e.task_id) ?? "مهمة"}
+                    </span>
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {e.actor_id ? (nameById.get(e.actor_id) ?? "") : ""}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
   );
 }

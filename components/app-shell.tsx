@@ -7,6 +7,7 @@ import {
   Contact,
   FolderKanban,
   LayoutDashboard,
+  ListChecks,
   LogOut,
   ShieldCheck,
   Users,
@@ -34,6 +35,7 @@ type NavItem = {
 const NAV: NavItem[] = [
   { href: "/dashboard", label: "الرئيسية", icon: LayoutDashboard },
   { href: "/projects", label: "المشاريع", icon: FolderKanban, perm: "projects.view" },
+  { href: "/tasks", label: "المهام", icon: ListChecks, perm: "tasks.view" },
   { href: "/clients", label: "العملاء", icon: Contact, perm: "clients.view" },
   { href: "/team", label: "الفريق", icon: Users, perm: "team.manage" },
   { href: "/settings/permissions", label: "الصلاحيات", icon: ShieldCheck, perm: "permissions.manage" },

@@ -304,6 +304,144 @@ export type Database = {
         }
         Relationships: []
       }
+      task_events: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          event_type: Database["public"]["Enums"]["task_event_type"]
+          from_assignee: string | null
+          from_status: Database["public"]["Enums"]["task_status"] | null
+          id: number
+          metadata: Json
+          note: string | null
+          task_id: string
+          to_assignee: string | null
+          to_status: Database["public"]["Enums"]["task_status"] | null
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          event_type: Database["public"]["Enums"]["task_event_type"]
+          from_assignee?: string | null
+          from_status?: Database["public"]["Enums"]["task_status"] | null
+          id?: never
+          metadata?: Json
+          note?: string | null
+          task_id: string
+          to_assignee?: string | null
+          to_status?: Database["public"]["Enums"]["task_status"] | null
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          event_type?: Database["public"]["Enums"]["task_event_type"]
+          from_assignee?: string | null
+          from_status?: Database["public"]["Enums"]["task_status"] | null
+          id?: never
+          metadata?: Json
+          note?: string | null
+          task_id?: string
+          to_assignee?: string | null
+          to_status?: Database["public"]["Enums"]["task_status"] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_events_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_events_from_assignee_fkey"
+            columns: ["from_assignee"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_events_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_events_to_assignee_fkey"
+            columns: ["to_assignee"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tasks: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          current_assignee_id: string | null
+          description: string | null
+          due_at: string | null
+          id: string
+          priority: Database["public"]["Enums"]["task_priority"]
+          progress: number
+          project_id: string
+          status: Database["public"]["Enums"]["task_status"]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          current_assignee_id?: string | null
+          description?: string | null
+          due_at?: string | null
+          id?: string
+          priority?: Database["public"]["Enums"]["task_priority"]
+          progress?: number
+          project_id: string
+          status?: Database["public"]["Enums"]["task_status"]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          current_assignee_id?: string | null
+          description?: string | null
+          due_at?: string | null
+          id?: string
+          priority?: Database["public"]["Enums"]["task_priority"]
+          progress?: number
+          project_id?: string
+          status?: Database["public"]["Enums"]["task_status"]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tasks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_current_assignee_id_fkey"
+            columns: ["current_assignee_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_permission_overrides: {
         Row: {
           allowed: boolean
@@ -343,6 +481,51 @@ export type Database = {
       has_perm: { Args: { perm_key: string }; Returns: boolean }
       is_accountant: { Args: never; Returns: boolean }
       is_manager: { Args: never; Returns: boolean }
+      task_add_note: {
+        Args: { p_note: string; p_task: string }
+        Returns: undefined
+      }
+      task_assign: {
+        Args: { p_assignee: string; p_note?: string; p_task: string }
+        Returns: undefined
+      }
+      task_close: {
+        Args: { p_note?: string; p_task: string }
+        Returns: undefined
+      }
+      task_create: {
+        Args: {
+          p_assignee?: string
+          p_description?: string
+          p_due_at?: string
+          p_note?: string
+          p_priority?: Database["public"]["Enums"]["task_priority"]
+          p_project: string
+          p_title: string
+        }
+        Returns: string
+      }
+      task_delete: {
+        Args: { p_note?: string; p_task: string }
+        Returns: undefined
+      }
+      task_milestone: {
+        Args: { p_label: string; p_note?: string; p_task: string }
+        Returns: undefined
+      }
+      task_reopen: {
+        Args: { p_note?: string; p_task: string }
+        Returns: undefined
+      }
+      task_set_progress: {
+        Args: { p_note?: string; p_progress: number; p_task: string }
+        Returns: undefined
+      }
+      task_start: { Args: { p_task: string }; Returns: undefined }
+      task_submit: {
+        Args: { p_note?: string; p_task: string }
+        Returns: undefined
+      }
       team_directory: {
         Args: never
         Returns: {
@@ -361,6 +544,19 @@ export type Database = {
         | "on_hold"
         | "completed"
         | "cancelled"
+      task_event_type:
+        | "created"
+        | "assigned"
+        | "reassigned"
+        | "started"
+        | "progress"
+        | "note"
+        | "submitted"
+        | "reopened"
+        | "closed"
+        | "milestone"
+      task_priority: "low" | "normal" | "high" | "urgent"
+      task_status: "new" | "assigned" | "in_progress" | "submitted" | "closed"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -496,6 +692,20 @@ export const Constants = {
         "completed",
         "cancelled",
       ],
+      task_event_type: [
+        "created",
+        "assigned",
+        "reassigned",
+        "started",
+        "progress",
+        "note",
+        "submitted",
+        "reopened",
+        "closed",
+        "milestone",
+      ],
+      task_priority: ["low", "normal", "high", "urgent"],
+      task_status: ["new", "assigned", "in_progress", "submitted", "closed"],
     },
   },
 } as const
