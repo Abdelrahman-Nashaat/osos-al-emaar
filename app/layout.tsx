@@ -23,6 +23,7 @@ export const viewport: Viewport = {
   themeColor: "#0f172a",
   width: "device-width",
   initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -33,7 +34,11 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-background text-foreground">
         {children}
         <PwaRegister />
-        <Toaster richColors position="top-center" />
+        <Toaster
+          richColors
+          position="bottom-center"
+          mobileOffset={{ bottom: "calc(4.5rem + env(safe-area-inset-bottom))" }}
+        />
       </body>
     </html>
   );

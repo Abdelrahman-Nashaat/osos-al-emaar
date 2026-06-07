@@ -46,7 +46,7 @@ export function AppShell({
 
   return (
     <div className="flex min-h-svh flex-col">
-      <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-border bg-background px-4">
+      <header className="sticky top-0 z-20 flex h-[calc(3.5rem+env(safe-area-inset-top))] items-center justify-between border-b border-border bg-background px-4 pt-[env(safe-area-inset-top)]">
         <div className="flex items-center gap-2">
           <Building2 className="size-5 text-primary" aria-hidden />
           <span className="text-sm font-bold">{brand.shortNameAr}</span>
@@ -55,7 +55,7 @@ export function AppShell({
           <span className="hidden text-sm font-medium sm:inline">{userName}</span>
           <Badge variant="secondary">{ROLE_LABEL[role] ?? role}</Badge>
           <form action={signOut}>
-            <Button type="submit" variant="ghost" size="icon" aria-label="تسجيل الخروج">
+            <Button type="submit" variant="ghost" size="icon" className="size-10" aria-label="تسجيل الخروج">
               <LogOut className="size-4" />
             </Button>
           </form>
@@ -83,17 +83,17 @@ export function AppShell({
           </nav>
         </aside>
 
-        <main className="flex-1 p-4 pb-24 md:pb-6">{children}</main>
+        <main className="flex-1 p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-6">{children}</main>
       </div>
 
-      <nav className="fixed inset-x-0 bottom-0 z-20 flex border-t border-border bg-background md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-20 flex border-t border-border bg-background pb-[env(safe-area-inset-bottom)] md:hidden">
         {items.map((item) => (
           <Link
             key={item.href}
             href={item.href}
             className={cn(
-              "flex flex-1 flex-col items-center gap-1 py-2 text-xs",
-              isActive(item.href) ? "text-primary" : "text-muted-foreground",
+              "flex min-h-14 flex-1 flex-col items-center justify-center gap-1 border-t-2 border-transparent py-2 text-xs",
+              isActive(item.href) ? "border-primary text-primary" : "text-muted-foreground",
             )}
           >
             <item.icon className="size-5" />

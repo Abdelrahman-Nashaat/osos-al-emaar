@@ -1,6 +1,6 @@
 # Engineering Office App — Master Plan & Claude Code Setup
 
-> Status: **Phase 0 complete** — scaffold + Arabic RTL + PWA + Supabase clients; pushed to GitHub `Abdelrahman-Nashaat/osos-al-emaar`; deployed to Vercel `osos-al-emaar` (Deployment Protection ON). **Now planning Phase 1 (Identity & RBAC); code only after the operator approves this Phase 1 plan.** Build runs as vertical slices, one phase at a time.
+> Status: **Phase 0 + Phase 1 complete** — scaffold + Arabic RTL + PWA + Supabase clients (Phase 0); Identity & RBAC with RLS on all tables, financials hard-locked, team + permissions admin, `audit_log`, bootstrap manager created (Phase 1). Pushed to GitHub `Abdelrahman-Nashaat/osos-al-emaar`; deployed to Vercel `osos-al-emaar` (Deployment Protection ON). **Current step:** post-Phase-1 `/ui-review` fixes (serious RTL/mobile/permission-UX only — see §Phase 1.5) + tenancy decision (see §ADR-1). **Phase 2 (Clients & Projects) code only after the operator approves.** Build runs as vertical slices, one phase at a time.
 > Brand: **شركة أسس الإعمار المتقدمة** — kept in one config constant (`lib/config/brand.ts`).
 > Chat language: replies in **English**; operator writes in Arabic. **App UI is Arabic-first, RTL, mobile-first.**
 > Currency: **SAR** (currency field kept for future international use).
@@ -196,6 +196,56 @@ Idempotent (`npx tsx`): if a manager exists, exit; else create auth user + manag
 **Reused from Phase 0:** `lib/env.ts` (`getServiceRoleKey`, `getPublicEnv`), `lib/supabase/{client,server}.ts`, `lib/config/brand.ts`, `components.json` (shadcn-ready), the RTL/token `app/globals.css`.
 
 **Verification (end-to-end):** apply migration → advisors clean → run bootstrap → `npm run dev`: manager creates engineer + accountant, role-correct nav, edits a role default + a per-user override, engineer blocked from manager pages; all gates green.
+
+---
+
+## Phase 1.5 — UI/UX review fixes (post `/ui-review`, **serious only**)
+
+**Context:** After Phase 1, the `frontend-rtl-reviewer` did a static RTL/mobile/role review of the Phase 1 screens. The financial hard-lock and RBAC gating reviewed **clean** (no money UI reachable by engineers; `financials.view` non-grantable at UI + resolver + DB-CHECK). The actionable problems are concentrated in RTL/mobile primitives. Per operator: **fix only serious RTL/mobile/auth-permission UX issues**; defer polish. **No change to any RBAC/financial logic.**
+
+### A. shadcn primitives (highest leverage — reused by every table/toggle)
+- `components/ui/switch.tsx`
+  - **S1 — RTL thumb travels the wrong way** (the toggle that grants permissions/activates staff reads backwards in Arabic). `translate-x` is physical and does not flip under `dir="rtl"`. Replace the thumb travel with direction-gated utilities (mutually exclusive → robust regardless of Tailwind `:where()` specificity):
+    `data-[state=unchecked]:translate-x-0 ltr:data-[state=checked]:translate-x-[calc(100%-2px)] rtl:data-[state=checked]:-translate-x-[calc(100%-2px)]`.
+  - **S3 — tap target** ~18px tall. Bump default size `h-[1.15rem] w-8` → `h-6 w-11` and thumb `size-4` → `size-5` (≈44px-wide target). Keep `sm` size for dense desktop.
+- `components/ui/table.tsx` (**M1**, RTL correctness — bundled with S2): `TableHead` `text-left` → `text-start`; `[&:has([role=checkbox])]:pr-0` → `pe-0` on `TableHead` + `TableCell`. Fixes header alignment app-wide.
+
+### B. Responsive admin surfaces (S2 — no horizontal scroll on phones)
+- `app/(app)/team/team-table.tsx` — `md+` keeps the `<Table>` (`hidden md:block`); `< md` renders a stacked **member-card list** (`md:hidden`): name + «أنت» badge, email (`dir="ltr"`) on its own line, full-width role control, «نشط» + switch row. Reuse `changeRole`/`changeActive`.
+  - **M4 (permission-UX correctness):** make the role `<select>` **controlled** (local state seeded from `m.role`) and **revert on action error** — today it's `defaultValue`, so a rejected change (e.g. the last-manager guard) leaves the dropdown showing the wrong role while the toast says error. Bump select `h-8` → `h-10`.
+- `app/(app)/settings/permissions/role-defaults-editor.tsx` — `md+` keeps the matrix `<Table>` (`hidden md:block`); `< md` renders **one card per permission** (`md:hidden`): Arabic label heading + three rows (role label + switch, or the locked indicator for `financials.view`). Extract a small `Cell(role, key)` helper so the locked/switch logic isn't duplicated across both layouts. Reuse `toggle()`.
+
+### C. Mobile shell / installed-PWA (S4, S5, +M7)
+- `app/layout.tsx` — add `viewportFit: "cover"` to the `Viewport` export (enables safe-area insets). **S5:** Toaster `position="top-center"` → `position="bottom-center"` + `mobileOffset={{ bottom: "calc(4.5rem + env(safe-area-inset-bottom))" }}` so confirmations land near the thumb and clear the bottom nav.
+- `components/app-shell.tsx` — **S4:** bottom `<nav>` gets `pb-[env(safe-area-inset-bottom)]`, each item `min-h-14`, and a non-color active indicator (**M7**) `border-t-2 border-transparent` → active `border-primary text-primary`. `<main>` `pb-24` → `pb-[calc(6rem+env(safe-area-inset-bottom))]` (keep `md:pb-6`). Header: `pt-[env(safe-area-inset-top)]`; sign-out icon button → 40px target (`size="icon"` + `className="size-10"`).
+
+### Verification (Phase 1.5)
+`npx tsc --noEmit` + ESLint clean → existing `e2e/auth.spec.ts` + `e2e/rbac.spec.ts` still green (no logic touched) → manual/Playwright at **360px** and desktop: switch checked = thumb at the **end** in RTL; team + permissions screens show **no horizontal scroll** (stacked cards < md); toasts appear **bottom** on mobile and clear the nav; bottom nav clears the home indicator; a rejected role change **reverts** the dropdown. Re-running `frontend-rtl-reviewer` is optional for these contained fixes.
+
+### Deferred polish (NOT this pass — candidate for a later cleanup slice)
+M2 native English validation bubble → `noValidate` + inline Arabic errors (login + add-member) · M3 password show/hide + copy + generator · M5 `✓/✗` glyph → labeled colored badge with visible "locked" helper · M6 dashboard greeting de-dupe vs header · N1 `start_url: "/dashboard"` · N2 dedicated maskable icon + 192/512 PNG fallbacks · N3 offline page · N4 route `loading.tsx` skeletons · N6 digit-shaping consistency · N7 name hidden `< sm`.
+
+---
+
+## ADR-1 — Tenancy / multi-office reuse (operator-confirmed)
+
+**Decision:** **Single office per deployment** for v1 — one Supabase DB + one Vercel project per office. Reuse for other engineering offices = **redeploy the same codebase with different brand/config/env**. **Do NOT add `tenant_id` or shared multi-tenant infrastructure now.**
+
+**Why:**
+- **Isolation is the feature, not a limitation.** Offices may be competitors and financial data is highly sensitive; physically separate databases give the strongest isolation and keep the security story simple — the financial hard-lock never has to also defend against cross-office leakage.
+- **Matches "sell copies / white-label."** A sale = provisioning an isolated, branded instance. Legitimate (even premium) distribution model.
+- **Fastest, lowest-risk v1.** Phase 1 is already single-tenant; zero rework; no `org_id` on every table; no tenant-scoped RLS to get wrong.
+
+**Conventions that keep the code reusable (no new complexity — mostly already true):**
+1. Office-specific values live in **config/env, never hard-coded**: `lib/config/brand.ts` (name/short/tagline/colors), currency (SAR), locale. Per-office = swap config + env at deploy. ✓
+2. **Clean env boundaries:** `lib/env.ts` validates per-deployment env; secrets per instance; `service_role` server-only. ✓
+3. **All RLS routes through `SECURITY DEFINER` helpers** (`is_manager()`, `can_view_financials()`, `has_perm()`) — never inline `auth.uid()` gymnastics. ✓ This is the future seam: a `current_org()` helper could slot in with minimal policy edits if multi-tenant is ever needed.
+
+**Explicitly out (per "no complexity now"):** no `organizations`/`tenant_id` columns; no `office_settings` singleton in v1 (config covers branding). The singleton is noted only as the *future* tenant seam if office-editable branding is ever wanted.
+
+**Revisit triggers (→ consider full multi-tenant later, as its own project):** several small offices want self-serve signup and won't pay for isolated instances · need central billing/analytics across offices · per-instance ops cost becomes painful (~5–10+ instances).
+
+**Impact on Phase 2:** none beyond keeping the conventions above. Clients/projects/financials stay single-tenant; RLS keeps routing through helpers; no `tenant_id`.
 
 ---
 

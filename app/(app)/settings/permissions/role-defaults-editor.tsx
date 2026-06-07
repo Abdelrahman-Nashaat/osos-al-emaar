@@ -36,50 +36,76 @@ export function RoleDefaultsEditor({ matrix }: { matrix: Matrix }) {
     startTransition(async () => notify(await setRolePermission(role, key, allowed)));
   }
 
+  // One control per (role, permission), reused by the desktop matrix and the
+  // mobile stacked cards. financials.view is role-bound and never editable here.
+  function cell(role: AppRole, key: PermissionKey) {
+    if (key === "financials.view") {
+      return (
+        <span
+          className="inline-flex items-center justify-center gap-1 text-xs text-muted-foreground"
+          title="مرتبطة بالدور — غير قابلة للتعديل"
+        >
+          <Lock className="size-3" aria-hidden />
+          {role === "engineer" ? "✗" : "✓"}
+        </span>
+      );
+    }
+    return (
+      <Switch
+        aria-label={`${PERMISSION_LABELS[key]} — ${ROLE_LABELS[role]}`}
+        checked={matrix[role]?.[key] ?? false}
+        disabled={pending}
+        onCheckedChange={(v) => toggle(role, key, v)}
+      />
+    );
+  }
+
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>الصلاحية</TableHead>
-          {ROLES.map((r) => (
-            <TableHead key={r} className="text-center">
-              {ROLE_LABELS[r]}
-            </TableHead>
-          ))}
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {PERMISSION_KEYS.map((key) => {
-          const locked = key === "financials.view";
-          return (
-            <TableRow key={key}>
-              <TableCell className="font-medium">{PERMISSION_LABELS[key]}</TableCell>
-              {ROLES.map((role) => (
-                <TableCell key={role} className="text-center">
-                  {locked ? (
-                    <span
-                      className="inline-flex items-center justify-center gap-1 text-xs text-muted-foreground"
-                      title="مرتبطة بالدور — غير قابلة للتعديل"
-                    >
-                      <Lock className="size-3" aria-hidden />
-                      {role === "engineer" ? "✗" : "✓"}
-                    </span>
-                  ) : (
-                    <div className="flex justify-center">
-                      <Switch
-                        aria-label={`${PERMISSION_LABELS[key]} — ${ROLE_LABELS[role]}`}
-                        checked={matrix[role]?.[key] ?? false}
-                        disabled={pending}
-                        onCheckedChange={(v) => toggle(role, key, v)}
-                      />
-                    </div>
-                  )}
-                </TableCell>
+    <>
+      {/* Desktop: matrix */}
+      <div className="hidden md:block">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>الصلاحية</TableHead>
+              {ROLES.map((r) => (
+                <TableHead key={r} className="text-center">
+                  {ROLE_LABELS[r]}
+                </TableHead>
               ))}
             </TableRow>
-          );
-        })}
-      </TableBody>
-    </Table>
+          </TableHeader>
+          <TableBody>
+            {PERMISSION_KEYS.map((key) => (
+              <TableRow key={key}>
+                <TableCell className="font-medium">{PERMISSION_LABELS[key]}</TableCell>
+                {ROLES.map((role) => (
+                  <TableCell key={role} className="text-center">
+                    <div className="flex justify-center">{cell(role, key)}</div>
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+
+      {/* Mobile: one card per permission (no horizontal scroll) */}
+      <div className="space-y-3 md:hidden">
+        {PERMISSION_KEYS.map((key) => (
+          <div key={key} className="rounded-lg border border-border p-4">
+            <div className="mb-2 font-medium">{PERMISSION_LABELS[key]}</div>
+            <div className="divide-y divide-border">
+              {ROLES.map((role) => (
+                <div key={role} className="flex items-center justify-between py-2">
+                  <span className="text-sm text-muted-foreground">{ROLE_LABELS[role]}</span>
+                  {cell(role, key)}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
   );
 }
