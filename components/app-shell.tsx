@@ -2,7 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, LayoutDashboard, LogOut, ShieldCheck, Users } from "lucide-react";
+import {
+  Building2,
+  Contact,
+  FolderKanban,
+  LayoutDashboard,
+  LogOut,
+  ShieldCheck,
+  Users,
+} from "lucide-react";
 import { brand } from "@/lib/config/brand";
 import { cn } from "@/lib/utils";
 import { usePermissions } from "@/components/auth/permissions-provider";
@@ -25,6 +33,8 @@ type NavItem = {
 
 const NAV: NavItem[] = [
   { href: "/dashboard", label: "الرئيسية", icon: LayoutDashboard },
+  { href: "/projects", label: "المشاريع", icon: FolderKanban, perm: "projects.view" },
+  { href: "/clients", label: "العملاء", icon: Contact, perm: "clients.view" },
   { href: "/team", label: "الفريق", icon: Users, perm: "team.manage" },
   { href: "/settings/permissions", label: "الصلاحيات", icon: ShieldCheck, perm: "permissions.manage" },
 ];
@@ -92,12 +102,12 @@ export function AppShell({
             key={item.href}
             href={item.href}
             className={cn(
-              "flex min-h-14 flex-1 flex-col items-center justify-center gap-1 border-t-2 border-transparent py-2 text-xs",
+              "flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 border-t-2 border-transparent px-1 py-2 text-xs",
               isActive(item.href) ? "border-primary text-primary" : "text-muted-foreground",
             )}
           >
-            <item.icon className="size-5" />
-            {item.label}
+            <item.icon className="size-5 shrink-0" />
+            <span className="max-w-full truncate">{item.label}</span>
           </Link>
         ))}
       </nav>

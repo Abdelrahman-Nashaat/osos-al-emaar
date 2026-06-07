@@ -1,6 +1,6 @@
 # Engineering Office App — Master Plan & Claude Code Setup
 
-> Status: **Phase 0 + Phase 1 complete** — scaffold + Arabic RTL + PWA + Supabase clients (Phase 0); Identity & RBAC with RLS on all tables, financials hard-locked, team + permissions admin, `audit_log`, bootstrap manager created (Phase 1). Pushed to GitHub `Abdelrahman-Nashaat/osos-al-emaar`; deployed to Vercel `osos-al-emaar` (Deployment Protection ON). **Current step:** post-Phase-1 `/ui-review` fixes (serious RTL/mobile/permission-UX only — see §Phase 1.5) + tenancy decision (see §ADR-1). **Phase 2 (Clients & Projects) code only after the operator approves.** Build runs as vertical slices, one phase at a time.
+> Status: **Phases 0, 1, 1.5 complete & deployed.** Phase 0 (scaffold + Arabic RTL + PWA + Supabase clients); Phase 1 (Identity & RBAC — RLS on all tables, financials hard-locked, team + permissions admin, `audit_log`, bootstrap manager); Phase 1.5 (post-`/ui-review` RTL/mobile fixes). Pushed to GitHub `Abdelrahman-Nashaat/osos-al-emaar`; **production live at `osos-al-emaar.vercel.app`** (`vercel.json` pins `framework:nextjs`; Deployment Protection ON). **Current step:** Phase 2 (Clients & Projects) **built + reviewed + gated** — migrations 0004–0007 (clients/projects/`project_financials`/project_members + a names-only `team_directory()`); financial isolation proven by the engineer-JWT e2e; gate green (tsc/eslint/vitest 12/Playwright 11/advisors no-ERROR); security + RTL reviews done, serious findings fixed. Deploying to production. **Phase 3 (Tasks & lifecycle) not started — awaiting approval.** Build runs as vertical slices, one phase at a time.
 > Brand: **شركة أسس الإعمار المتقدمة** — kept in one config constant (`lib/config/brand.ts`).
 > Chat language: replies in **English**; operator writes in Arabic. **App UI is Arabic-first, RTL, mobile-first.**
 > Currency: **SAR** (currency field kept for future international use).
@@ -246,6 +246,94 @@ M2 native English validation bubble → `noValidate` + inline Arabic errors (log
 **Revisit triggers (→ consider full multi-tenant later, as its own project):** several small offices want self-serve signup and won't pay for isolated instances · need central billing/analytics across offices · per-instance ops cost becomes painful (~5–10+ instances).
 
 **Impact on Phase 2:** none beyond keeping the conventions above. Clients/projects/financials stay single-tenant; RLS keeps routing through helpers; no `tenant_id`.
+
+---
+
+## Phase 2 — Detailed Build Plan (Clients & Projects) — *code only after approval*
+
+**Context / why now:** Phase 1 delivered the security backbone (auth, roles, RLS, financial hard-lock) but no business data. Phase 2 adds the operational core Hamza actually runs his office on — **clients** and **projects** — and proves the two pillars on *real* data: shared multi-device state **and** DB-enforced financial isolation. The financial layer stays in a **separate, isolated table** (`project_financials`) that engineers can never read.
+
+**Operator-confirmed visibility rule (Hamza):** engineers see full **operational** client/project detail — name, phone, address/location, notes, linked projects, status, dates, progress, assigned engineers — but **never any amount** (budget, contract value, cost, invoices, payments, totals). Because the `clients` table holds **no money** (every amount lives in `project_financials` and the future invoices/payments tables), `clients` is engineer-readable at the **row** level via RLS, while the **Clients module/nav stays hidden** from engineers — client details surface **read-only inside project views**. Enforced at **DB/RLS**, not UI only.
+
+**Scope — 4 tables, no new permission keys, no new helpers, no admin-client use.** `clients` · `projects` · `project_financials` · `project_members`. Reuses seeded keys `projects.view/edit`, `clients.view/edit`, `financials.view` and existing helpers `is_manager()`, `is_accountant()`, `can_view_financials()`, `has_perm()`. **Out of scope (later):** invoices/payments/collections/reports + client financial **totals** (derived, Phase 4); tasks & lifecycle (Phase 3); portfolio/offers (Phase 5); Realtime/global search/export (Phase 6).
+
+**Reused from Phase 1:** migration style (`0000` auto-RLS backstop + **explicit** policies) · `set_updated_at()` trigger · SECURITY DEFINER helpers · server-action pattern (zod → permission guard → **user-scoped** `createClient()` → `audit_log` → `revalidatePath`) · page pattern (`getSessionProfile`→redirect, `getEffectivePermissions`+`can()`→`<PermissionDenied/>`) · responsive table/stacked-card + controlled-input patterns from Phase 1.5 · `NAV` gating in `components/app-shell.tsx` · self-seeding RLS-proof e2e (`e2e/rbac.spec.ts`).
+
+### 1. DB migration — `supabase/migrations/0004_clients_projects.sql`
+- **Enum:** `project_status as enum ('planning','active','on_hold','completed','cancelled')`.
+- **`clients`** (operational only — *never* a money column): `id uuid pk default gen_random_uuid()`, `name not null`, `company`, `phone`, `email`, `address`, `country text default 'SA'`, `notes`, `created_by → profiles`, `created_at`, `updated_at`. Index `(name)`.
+- **`projects`** (operational only — *no* cost/budget columns): `id`, `name not null`, `code`, `client_id → clients on delete restrict`, `status project_status default 'planning'`, `progress int default 0 check (progress between 0 and 100)`, `start_date date`, `due_date date`, `description`, `created_by → profiles`, timestamps. Indexes `(client_id)`,`(status)`,`(due_date)`.
+- **`project_financials`** (ISOLATED — manager+accountant only): `project_id uuid pk → projects on delete cascade`, `budget numeric(14,2)`, `contract_value numeric(14,2)`, `cost numeric(14,2)`, `currency text default 'SAR'`, `notes`, `updated_by → profiles`, timestamps.
+- **`project_members`** (lightweight assignment): `project_id → projects on delete cascade`, `user_id → profiles on delete cascade`, `added_by → profiles`, `added_at default now()`, **`pk(project_id, user_id)`**. Index `(user_id)`.
+- Reuse `set_updated_at` triggers on clients/projects/project_financials.
+- **RLS — explicit policies (the `0000` event trigger only *enables* RLS; deny-by-default needs these):**
+  - **clients** — SELECT `using (has_perm('clients.view') or has_perm('projects.view'))` → manager+accountant via `clients.view`, **engineer via `projects.view`** (operational read); INSERT/UPDATE `with check (has_perm('clients.edit'))` (manager); DELETE `using (is_manager())`.
+  - **projects** — SELECT `using (has_perm('projects.view') or can_view_financials())` → manager+engineer; accountant via financials (Phase 4 context); INSERT/UPDATE `using/with check (has_perm('projects.edit'))` (manager + engineer *if granted* the `projects.edit` override); DELETE `using (is_manager())`.
+  - **project_financials** — **SELECT `using (can_view_financials())`; INSERT/UPDATE/DELETE `using/with check (is_manager())`.** Hard isolation: an engineer JWT gets **0 rows**. (Write stays manager-only in v2; relax to `can_view_financials()` when the accountant gets finance UI in Phase 4.)
+  - **project_members** — SELECT `using (has_perm('projects.view') or can_view_financials())`; INSERT/DELETE `using/with check (has_perm('projects.edit'))`.
+- Apply via `mcp__supabase__apply_migration` to `anqrrhqjkmvaymvkdjtj` → `get_advisors` (expect **no RLS gaps**) → `generate_typescript_types` → overwrite `lib/supabase/database.types.ts`.
+
+### 2. Domain helper (pure, unit-tested)
+- `lib/projects/status.ts` — `PROJECT_STATUSES` + Arabic `PROJECT_STATUS_LABELS` (تخطيط / قيد التنفيذ / متوقف مؤقتاً / مكتمل / ملغى); `isOverdue(dueDate, status)` = `dueDate != null && dueDate < today && status not in ('completed','cancelled')`. Pure module (no server deps) like `lib/auth/permission-keys.ts` → safe for client + tests.
+
+### 3. Server actions + pages (Arabic RTL)
+- **Clients module — manager full · accountant read-only · engineer no module (data visible inside projects).**
+  - `app/(app)/clients/page.tsx` — gate `can(perms,'clients.view')` (engineer → `<PermissionDenied/>`, no nav item). List clients; add/edit/delete controls render only when `can(perms,'clients.edit')`.
+  - `app/(app)/clients/actions.ts` — `createClient`/`updateClient`/`deleteClient`: zod-validate → guard `has_perm('clients.edit')` server-side (RLS is the real gate) → `audit_log` → `revalidatePath('/clients')`.
+  - Components: `clients-table.tsx` (desktop `<Table>` `hidden md:block` / mobile stacked cards `md:hidden`, per Phase 1.5) + `client-form.tsx` (shadcn `dialog`).
+- **Projects module — manager + granted engineers write · engineer read incl. client detail · money gated.**
+  - `app/(app)/projects/page.tsx` — gate `projects.view`; list rows = name, client name, status badge, progress bar, due date (**overdue = red** via `isOverdue`). A **budget** column renders only when `can(perms,'financials.view')`, sourced from a single gated `project_financials` map fetch (no N+1). Create/edit controls only when `can(perms,'projects.edit')`.
+  - `app/(app)/projects/[id]/page.tsx` — operational detail for anyone with `projects.view`: name/status/progress/dates; **client info read-only** (name, phone, address, notes — RLS-allowed for engineers); assigned engineers. **`<ProjectFinancialsCard>` is fetched AND rendered only inside `if (can(perms,'financials.view'))`** → an engineer's server render never fetches or emits any amount (**DOM-level** isolation, not CSS hiding).
+  - `app/(app)/projects/actions.ts` — `createProject`/`updateProject`/`deleteProject` (operational fields; guard `projects.edit`, delete = manager); `setProjectFinancials` (budget/contract/cost; guard `is_manager()`; RLS blocks engineers regardless); `addProjectMember`/`removeProjectMember` (guard `projects.edit`). All audited + `revalidatePath`.
+  - Components: `projects-table.tsx`, `project-form.tsx` (dialog; budget/contract fields rendered **only** for financials viewers), `project-financials-card.tsx`, `project-members-editor.tsx`, `status-badge.tsx`, `progress-bar.tsx`.
+- **Nav** (`components/app-shell.tsx` `NAV` array): add `{ href:'/projects', perm:'projects.view', icon: FolderKanban }` and `{ href:'/clients', perm:'clients.view', icon: Contact }` → manager sees both; **engineer sees Projects only**; accountant sees Clients only. (Matches Hamza's matrix; Clients module hidden from engineers while client *data* stays visible inside projects.)
+
+### 4. shadcn additions
+`npx shadcn@latest add textarea dialog alert-dialog tabs` (forms, delete-confirm, project-detail sections). Dates use native `<input type="date">` (real date field → overdue detection; RTL-safe). Progress = Tailwind bar (no new dep).
+
+### 5. Tests
+- **Unit (vitest):** `lib/projects/status.test.ts` — `isOverdue` truth table (past+active = overdue · past+completed/cancelled = not · null due = not · future = not).
+- **e2e `e2e/projects.spec.ts`** (self-seed manager+engineer+accountant via service-role admin, like `rbac.spec.ts`):
+  - **Manager:** create client → create project (linked, real dates) → set budget/contract → amounts visible; an overdue project shows red.
+  - **Engineer:** `/projects` + detail show client name/phone/address + status/progress, and **no budget/contract anywhere in the DOM**; `/clients` → `<PermissionDenied/>`; no Clients nav.
+  - **Accountant:** `/clients` read-only (no add/edit buttons); `/projects` denied (no nav).
+  - **Make-or-break RLS proof (engineer JWT via `@supabase/supabase-js`):** `select * from project_financials` → **0 rows**; `insert into projects` → **denied**; `select * from clients` → **rows returned** (operational access confirmed); `update clients` → **denied**. Then manager grants engineer the `projects.edit` override → engineer `insert into projects` **allowed**, yet `project_financials` **still 0 rows** (isolation holds for a *granted* engineer). Accountant JWT: `select clients` allowed · `update clients` denied · `select project_financials` allowed · `insert/update project_financials` **denied** (manager-only).
+
+### 6. Phase 2 gate (Amendment 4)
+`tsc --noEmit` → ESLint → vitest → Playwright (auth + rbac + **projects**) → `get_advisors` (no RLS gaps) → `/security-audit` (`supabase-security-reviewer`) → `/ui-review` (`frontend-rtl-reviewer`). Then commit + push + **`npx vercel deploy --prod --yes`** + verify.
+
+### 7. Security checklist (Phase 2-specific)
+- RLS enabled **and explicit** policies on all 4 tables; `get_advisors` clean.
+- **`project_financials` deny-by-default**; engineer JWT returns **0 rows** (proven by the make-or-break test) — UI hiding *and* DB enforcement.
+- **No amount columns** on `clients`/`projects`; money lives only in `project_financials` (+ future invoices/payments). Client financial **totals** are *derived* in Phase 4 behind `can_view_financials()`, **never stored** on `clients`.
+- All writes via **user-scoped** server actions (RLS-enforced) + zod; **no `service_role`/admin client** in Phase 2 (no auth-user creation here); none in any `NEXT_PUBLIC_*`/client bundle.
+- `audit_log` for create/update/delete of clients, projects, financials, members.
+- **Realtime:** do **not** add `project_financials` to any client-subscribed publication (Realtime deferred to Phase 6; if enabled for projects, financials stays excluded).
+- Financial isolation also at **render**: engineer server render never fetches/sends amounts (DOM-asserted), not CSS-hidden.
+
+### 8. Vercel
+No infra/env change (schema is in Supabase). After the gate is green and merged to `main`: `npx vercel deploy --prod --yes` from repo root → verify `/projects` + `/clients` → **200** behind Deployment Protection; `/api/health` → **401**. **Keep Deployment Protection ON.**
+
+### 9. What becomes demonstrable to Hamza after Phase 2
+A real three-login walkthrough proving the two pillars on shared data:
+- **Manager:** add a client (name/phone/address) → create a project linked to that client with real start/due dates, status, progress → set **budget + contract value** → overdue projects show in **red**.
+- **Engineer (separate device):** opens the *same* project → sees client name/phone/address + status/progress/dates → **no budget/contract/amount anywhere**, and **no Clients module**.
+- **Accountant:** sees **Clients (read-only)**.
+- First slice with real business data: **multi-device shared state + DB-enforced financial isolation**, visible end-to-end.
+- **Exposure note (locked rule):** Deployment Protection stays **ON** — don't open the app publicly yet. Deliver Phase 2 sign-off to Hamza via a **recorded screen walkthrough** of the three logins (recommended), or a time-boxed operator-controlled share — operator's call.
+
+### 10. Verification (executor, end-to-end)
+Apply `0004` → `get_advisors` clean → regenerate types → `npm run dev`: manager creates client + project + financials; engineer sees operational detail but **zero amounts and no Clients module**; accountant sees clients read-only; a manager-granted engineer can add a project yet **still reads 0 financial rows**. All gate steps green → commit / push / `vercel deploy --prod` / verify.
+
+### Phase 2 — build status & review outcome (executed)
+
+**Built & gated green.** Migrations **0004** (clients/projects/`project_financials`/project_members + explicit RLS), then a team-visibility iteration **0005 → 0006 → 0007** that settled on: `profiles` SELECT = self + manager (Phase 1 posture) **plus** a `team_directory()` SECURITY DEFINER function exposing only `id/full_name/role/is_active` — so engineers can resolve colleague names ("assigned engineers", Phase 3 handoffs) **without** staff emails ever being readable. Gate: `tsc` + ESLint clean · vitest **12/12** · Playwright **11/11** · `get_advisors` **no ERROR**.
+
+**Make-or-break (financial isolation) — verified twice.** Engineer JWT reads **0 rows** from `project_financials` even when granted `projects.edit`; the engineer's project-detail HTML carries **no amount** (DOM-asserted); both reviewers confirmed no engineer path to money, **no `service_role` in Phase 2**, and the Realtime publication is empty. Advisors remaining = 6×WARN `security_definer_function_executable` (accepted class — each function only reveals the caller's own status, or a names-only directory) + 1×WARN auth leaked-password toggle.
+
+**Review fixes applied:** M1 staff-email exposure → `team_directory()` names-only; UUID validation on member actions; RTL back-arrow (`←`→`→`), LTR value alignment (`text-end`), financials-dialog `max-h`, ≥40px destructive tap targets, bottom-nav truncation; added boundary e2e (granted engineer can't delete project / write financials; plain engineer can't write `project_members`).
+
+**Deferred (documented, non-blocking):** (a) engineers can enumerate all client rows (operational, no money) → optionally membership-scope the `clients` SELECT in **Phase 3**; (b) audit-log writes are best-effort (log-on-failure later); (c) accountant-`audit_log` 0-rows test + a Realtime-publication regression guard → **Phase 6** when Realtime ships; (d) route `error.tsx`/`loading.tsx`; (e) latent `tabs.tsx` vertical-indicator RTL (unused).
 
 ---
 
