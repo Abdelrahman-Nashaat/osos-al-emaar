@@ -3,6 +3,7 @@ import { Cairo } from "next/font/google";
 import "./globals.css";
 import { brand } from "@/lib/config/brand";
 import { PwaRegister } from "@/components/pwa-register";
+import { Toaster } from "@/components/ui/sonner";
 
 const cairo = Cairo({
   subsets: ["arabic", "latin"],
@@ -32,6 +33,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-background text-foreground">
         {children}
         <PwaRegister />
+        <Toaster richColors position="top-center" />
       </body>
     </html>
   );

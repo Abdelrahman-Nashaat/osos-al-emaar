@@ -1,6 +1,6 @@
 # Engineering Office App — Master Plan & Claude Code Setup
 
-> Status: **Approved.** Build runs as **vertical slices**, one phase at a time, each phase approved before the next. **Execution now: Phase 0 only, then stop and show results before Phase 1.**
+> Status: **Phase 0 complete** — scaffold + Arabic RTL + PWA + Supabase clients; pushed to GitHub `Abdelrahman-Nashaat/osos-al-emaar`; deployed to Vercel `osos-al-emaar` (Deployment Protection ON). **Now planning Phase 1 (Identity & RBAC); code only after the operator approves this Phase 1 plan.** Build runs as vertical slices, one phase at a time.
 > Brand: **شركة أسس الإعمار المتقدمة** — kept in one config constant (`lib/config/brand.ts`).
 > Chat language: replies in **English**; operator writes in Arabic. **App UI is Arabic-first, RTL, mobile-first.**
 > Currency: **SAR** (currency field kept for future international use).
@@ -147,6 +147,57 @@ Run before declaring a phase done: **`tsc --noEmit` → ESLint → Playwright sm
 5. **Supabase connection check:** a tiny server-side health check that confirms the URL/anon key reach the project (no tables/data).
 6. Wire the existing GitHub repo + Vercel project; set env vars in Vercel; **preview deploy**; confirm the preview URL renders the Arabic RTL shell.
 7. Gate: `tsc --noEmit` + ESLint + a Playwright smoke test (app shell loads, `dir="rtl"`). **No `/security-audit`/`/ui-review` depth yet — minimal for Phase 0.** Then **stop and report** before Phase 1.
+
+## Phase 1 — Detailed Build Plan (Identity & RBAC) — *code only after approval*
+
+**Goal:** real auth + role-gated access + flexible RBAC, enforced at the **DB layer (RLS)**. Manager-creates-account is **server-only**. No financial tables yet (Phase 2), but the RBAC backbone — including the hard block on engineers ever seeing money — is locked here.
+
+**Prereqs (operator):** `SUPABASE_SERVICE_ROLE_KEY` ✓ set + verified (local + Vercel). Before the bootstrap step, set `BOOTSTRAP_ADMIN_EMAIL/PASSWORD/NAME` in `.env.local` (never in chat); remove them after first run.
+
+**Execution constraints (operator, locked):**
+1. Before any preview redeploy, ensure `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY` exist in **both Preview and Production** on Vercel (verify presence only, never print values).
+2. Bootstrap creds (`BOOTSTRAP_ADMIN_EMAIL/PASSWORD/NAME`) live in `.env.local` **only** (never chat); verify presence only; **remove them from `.env.local` after a successful bootstrap**.
+3. The next commit includes this plan update + the `.gitignore` change; **never commit `.env.local`**.
+4. **Stop after the Phase 1 gate/report. Do not start Phase 2.**
+
+### 1. DB migration — `supabase/migrations/0001_identity_rbac.sql`
+- `create type app_role as enum ('manager','engineer','accountant');`
+- **Tables:** `profiles`(id→auth.users, full_name, email, role app_role, is_active, timestamps) · `role_permissions`(role, permission_key, allowed, PK(role,key)) · `user_permission_overrides`(user_id→profiles, permission_key, allowed, PK) **+ CHECK (permission_key LIKE 'projects.%' OR LIKE 'tasks.%')** — the DB-level guarantee engineers can never be granted `financials.view` (Amendment 1) · `audit_log`(id, actor_id, action, target_type, target_id, metadata jsonb, created_at). Indexes on role / user_id / created_at.
+- **Permission catalog** (seed `role_permissions`): `projects.view/edit` · `tasks.view/assign/delete` · `clients.view/edit` · `financials.view` · `team.manage` · `permissions.manage` · `portfolio.view/edit` · `offers.view/edit`. Defaults match Hamza's matrix (manager=all; engineer=projects.view,tasks.view,portfolio.view,offers.view; accountant=clients.view,financials.view,portfolio.view,offers.view). Manager edits these later via UI.
+- **Helpers** (`SECURITY DEFINER`, fixed `search_path`, `stable`): `current_app_role()`, `is_manager()`, `is_accountant()`, `can_view_financials() = is_manager() OR is_accountant()` (role-only), `has_perm(key) = coalesce(override, role default, false)` with `financials.view` always routed to `can_view_financials()`.
+- **RLS (enabled on all 4 tables):** profiles → SELECT self|manager; UPDATE self(name only)|manager(all, `WITH CHECK` blocks role escalation); INSERT manager. role_permissions → SELECT any authed; write manager. user_permission_overrides → SELECT self|manager; write manager (CHECK blocks financials). audit_log → SELECT manager; INSERT via admin client only.
+- Apply via Supabase MCP `apply_migration` to `anqrrhqjkmvaymvkdjtj`; run `get_advisors` (expect no RLS gaps); `generate_typescript_types` → `lib/supabase/database.types.ts`.
+
+### 2. Auth & server-only admin
+- `lib/supabase/admin.ts` — `import "server-only"`; `createAdminClient()` via `getServiceRoleKey()` (reuse `lib/env.ts`); no session persistence; used ONLY in server actions.
+- `middleware.ts` — @supabase/ssr session refresh; protect `/(app)/*` (→ `/login` if no session); `/login` → `/dashboard` if authed.
+- `app/(auth)/login/{page.tsx,actions.ts}` — Arabic RTL email+password form; `signInWithPassword`; Arabic errors. `app/(auth)/layout.tsx` centered. Logout server action.
+
+### 3. Effective permissions — `lib/auth/permissions.ts`
+Catalog + `GRANTABLE_KEYS` (projects.*/tasks.*); `getSessionProfile()`, `getEffectivePermissions(id)` (override ?? role default; financials.view = role-only), `can(perms,key)`, `requirePermission(key)` (server guard). Client: `components/auth/permissions-provider.tsx` + `usePermissions()` for **cosmetic** UI gating (RLS is the real gate).
+
+### 4. Role-gated shell & pages
+- `app/(app)/layout.tsx` (server) → session+profile or redirect; compute perms; render `components/app-shell.tsx` (client, RTL, sidebar desktop / bottom-nav mobile, nav filtered by perms, user menu + logout).
+- `app/(app)/dashboard/page.tsx` — Arabic greeting + role (widgets later). `components/permission-denied.tsx`. `app/page.tsx` → redirect `/dashboard`.
+- **Team (manager-only)** `app/(app)/team/{page.tsx,actions.ts}` — list members; `createTeamMember()` server action: verify is_manager → admin `auth.admin.createUser({email_confirm:true})` → insert profile → audit. Change-role / deactivate (audited).
+- **Permissions admin (manager-only)** `app/(app)/settings/permissions/{page.tsx,actions.ts}` — edit role defaults (roles×keys matrix) + per-user overrides (grantable keys only; financials.view hidden/disabled). Each write audited.
+
+### 5. First-manager bootstrap — `scripts/bootstrap-admin.ts`
+Idempotent (`npx tsx`): if a manager exists, exit; else create auth user + manager profile from `BOOTSTRAP_ADMIN_*` env. Operator runs once, then removes those env vars.
+
+### 6. shadcn + tests
+- `npx shadcn@latest add button input label card select table badge dropdown-menu switch separator sonner` + `<Toaster/>` in app layout.
+- **Unit (vitest):** permissions resolver (override ?? default; financials.view ignores overrides; grantable filter).
+- **Playwright** `e2e/{auth,rbac}.spec.ts`: manager login → creates engineer; engineer login → no Team/Permissions/Invoices nav, denied on those pages; **RLS proof with an engineer client: update `role_permissions` denied · insert override `financials.view` rejected by CHECK · other users' profiles return empty.**
+
+### 7. Phase 1 gate (Amendment 4)
+`tsc --noEmit` → ESLint → vitest → Playwright → `get_advisors` → `/security-audit` (supabase-security-reviewer) → `/ui-review` (frontend-rtl-reviewer). Then commit + push + redeploy preview.
+
+**Reused from Phase 0:** `lib/env.ts` (`getServiceRoleKey`, `getPublicEnv`), `lib/supabase/{client,server}.ts`, `lib/config/brand.ts`, `components.json` (shadcn-ready), the RTL/token `app/globals.css`.
+
+**Verification (end-to-end):** apply migration → advisors clean → run bootstrap → `npm run dev`: manager creates engineer + accountant, role-correct nav, edits a role default + a per-user override, engineer blocked from manager pages; all gates green.
+
+---
 
 ## Open questions to confirm with the client (non-blocking) — WhatsApp
 1. Exact legal spelling + logo/brand colors for «أسس الإعمار المتقدمة».
