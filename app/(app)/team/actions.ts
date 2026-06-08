@@ -39,6 +39,48 @@ async function isLastActiveManager(
   return (count ?? 0) === 0;
 }
 
+/**
+ * Maps a Supabase Auth admin error to a precise Arabic message. The decisive case:
+ * a present-but-invalid service-role key (or a URL↔key project mismatch) makes GoTrue
+ * reject with 401/403 — surfaced here as a clear "server config" message so a setup
+ * fault is never mistaken for a user-input fault (the old code blanket-treated any 422
+ * as "email already registered", which also swallowed weak-password/validation errors).
+ */
+function createUserErrorMessage(
+  err: { status?: number; code?: string; message?: string } | null,
+): string {
+  const code = (err?.code ?? "").toLowerCase();
+  const message = (err?.message ?? "").toLowerCase();
+  const status = err?.status;
+
+  if (code.includes("email_exists") || code.includes("user_already_exists") || message.includes("already")) {
+    return "هذا البريد مسجّل بالفعل.";
+  }
+  if (code.includes("weak_password") || message.includes("password")) {
+    return "كلمة المرور ضعيفة. اختر كلمة مرور أقوى (٨ أحرف فأكثر).";
+  }
+  if (code.includes("email_address_invalid") || message.includes("email")) {
+    return "البريد الإلكتروني غير صالح.";
+  }
+  // Present-but-invalid service-role key / wrong project / not authorized → GoTrue 401/403.
+  if (
+    status === 401 ||
+    status === 403 ||
+    code.includes("not_admin") ||
+    code.includes("no_authorization") ||
+    message.includes("api key") ||
+    message.includes("unauthorized") ||
+    message.includes("not allowed") ||
+    message.includes("invalid")
+  ) {
+    return "تعذّر إنشاء الحساب — إعداد الخادم غير صحيح (مفتاح الخدمة). أبلغ المطوّر.";
+  }
+  if (status === 429 || message.includes("rate")) {
+    return "محاولات كثيرة. انتظر قليلاً ثم حاول مرة أخرى.";
+  }
+  return "تعذّر إنشاء الحساب.";
+}
+
 export async function createTeamMember(
   _prev: ActionState,
   formData: FormData,
@@ -57,43 +99,68 @@ export async function createTeamMember(
   }
   const { fullName, email, password, role } = parsed.data;
 
-  // Privileged: only the server-only admin client may create auth users.
-  const admin = createAdminClient();
-  const { data: created, error: createErr } = await admin.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-    user_metadata: { full_name: fullName },
-  });
-  if (createErr || !created?.user) {
-    const duplicate =
-      createErr?.message?.toLowerCase().includes("already") || createErr?.status === 422;
-    return { error: duplicate ? "هذا البريد مسجّل بالفعل." : "تعذّر إنشاء الحساب." };
+  // The privileged work runs inside try/catch so a configuration fault (a missing or
+  // invalid service-role key) returns a clear Arabic message instead of THROWING — a
+  // thrown server action never updates useActionState, leaving a silent dead button
+  // (which is exactly how this bug presented in production).
+  try {
+    // Only the server-only admin client may create auth users.
+    const admin = createAdminClient();
+    const { data: created, error: createErr } = await admin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { full_name: fullName },
+    });
+    if (createErr || !created?.user) {
+      const e = createErr as { status?: number; code?: string; message?: string } | null;
+      // Server log (no secrets, no password) so the real GoTrue status/message is visible
+      // in Vercel runtime logs — the action used to log nothing on failure.
+      console.error("[team.create_member] createUser failed", {
+        status: e?.status,
+        code: e?.code,
+        message: e?.message,
+      });
+      return { error: createUserErrorMessage(e) };
+    }
+
+    const { error: profileErr } = await admin.from("profiles").insert({
+      id: created.user.id,
+      full_name: fullName,
+      email,
+      role,
+      is_active: true,
+    });
+    if (profileErr) {
+      console.error("[team.create_member] profile insert failed", {
+        code: profileErr.code,
+        message: profileErr.message,
+      });
+      // Avoid an orphaned auth user if the profile insert fails.
+      await admin.auth.admin.deleteUser(created.user.id);
+      return { error: "تعذّر حفظ بيانات الموظف." };
+    }
+
+    await admin.from("audit_log").insert({
+      actor_id: session.userId,
+      action: "team.create_member",
+      target_type: "profile",
+      target_id: created.user.id,
+      metadata: { role },
+    });
+
+    revalidatePath("/team");
+    return { success: `تم إنشاء حساب «${fullName}».` };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[team.create_member] unexpected failure:", message);
+    if (message.includes("SUPABASE_SERVICE_ROLE_KEY")) {
+      return {
+        error: "تعذّر إنشاء الحساب — إعداد الخادم غير مكتمل (مفتاح الخدمة مفقود). أبلغ المطوّر.",
+      };
+    }
+    return { error: "تعذّر إنشاء الحساب — خطأ غير متوقع. حاول مرة أخرى." };
   }
-
-  const { error: profileErr } = await admin.from("profiles").insert({
-    id: created.user.id,
-    full_name: fullName,
-    email,
-    role,
-    is_active: true,
-  });
-  if (profileErr) {
-    // Avoid an orphaned auth user if the profile insert fails.
-    await admin.auth.admin.deleteUser(created.user.id);
-    return { error: "تعذّر حفظ بيانات الموظف." };
-  }
-
-  await admin.from("audit_log").insert({
-    actor_id: session.userId,
-    action: "team.create_member",
-    target_type: "profile",
-    target_id: created.user.id,
-    metadata: { role },
-  });
-
-  revalidatePath("/team");
-  return { success: `تم إنشاء حساب «${fullName}».` };
 }
 
 export async function setMemberRole(userId: string, role: Role): Promise<ActionState> {

@@ -1,5 +1,54 @@
 # Engineering Office App — Master Plan & Claude Code Setup
 
+## 🔧 HOTFIX (ACTIVE) — Manager can't add staff on production («ما قدرت أضيف موظفين»)
+
+> **Phase 5 (Portfolio & Offers) is PAUSED — this hotfix takes priority.** Bug reported by Eng. Hamza on the live site `https://osos-al-emaar.vercel.app/team`; reproduced by the operator with the visible error **«تعذّر إنشاء الحساب.»** Code only after approval.
+
+### Context
+The general manager creating staff accounts is the gateway to the entire app — without it Hamza can't onboard the engineers/accountant, so no other module is usable. On production, "إضافة موظف" fails for both Hamza and the operator. Fix this before any further feature work.
+
+### Root cause (diagnosed from live evidence)
+The exact on-screen string **«تعذّر إنشاء الحساب.»** is returned by only one branch of `createTeamMember` (`app/(app)/team/actions.ts:71`): `admin.auth.admin.createUser(...)` **returned an error that is neither "duplicate" nor HTTP 422.** So the server-only admin client *was* constructed (the key env var is present) but **Supabase Auth rejected the privileged call** — the signature of a **`SUPABASE_SERVICE_ROLE_KEY` in Vercel Production that is present but is *not* the valid `service_role` secret for project `anqrrhqjkmvaymvkdjtj`** (wrong value / rotated / an anon-or-publishable key pasted into the slot / a key from a different project / `NEXT_PUBLIC_SUPABASE_URL`↔key project mismatch → GoTrue 401/403).
+
+**Why e2e & local are green but prod fails:** Playwright/e2e + the bootstrap script use the **local `.env.local`** service-role key (valid); Vercel Production carries a *different* value. `/api/health` only checks key **presence** (a boolean) + anon-key reachability — it never validates the service-role key, so the earlier "env: all true" was misleading.
+
+### Supporting evidence (read-only investigation, this session)
+- DB has **exactly one user** — the bootstrap manager `emara01111@gmail.com`; **zero** staff ever created; **`audit_log` has zero `team.%` rows** → the add-member action has **never once succeeded** in this deployment.
+- Supabase **auth logs** show only `GET /user` session checks (all `referer: localhost`); **no successful `POST /admin/users`** lands in project `anqrrhqjkmvaymvkdjtj` — consistent with the createUser call being rejected (or aimed at the wrong project). Vercel production runtime logs are empty (the action currently logs nothing on failure).
+- **No `auth.users` trigger** exists → the `profiles` insert is not the failure point; the createUser call itself is.
+- Leaked-password protection is **disabled** → weak passwords are *not* the cause.
+- Secondary code defects: a *thrown* failure (e.g. a genuinely missing key → `getServiceRoleKey()` throws) is **uncaught**, so `useActionState` never updates and **no toast appears at all** (silent dead button); and any HTTP **422 is mislabeled** as "email already registered" (it also covers weak-password/validation).
+
+### The fix (minimal — two tracks)
+**A. Infra (the actual unblock — operator, no code):** put the correct **`service_role` secret** (Supabase → Project Settings → API → `service_role` key for `anqrrhqjkmvaymvkdjtj`) into `SUPABASE_SERVICE_ROLE_KEY` on Vercel **Production + Preview**, and confirm `NEXT_PUBLIC_SUPABASE_URL` there points to the **same** project; redeploy. Verify presence-only — never print the value. (`service_role` stays server-only: it lives only in `lib/supabase/admin.ts` behind `import "server-only"`.)
+
+**B. Code hardening (so this can never be silent or misdiagnosed again) — `app/(app)/team/actions.ts`:**
+1. Wrap the whole privileged block (`createAdminClient()` + `createUser` + profile insert + audit) in `try/catch`; on a thrown error **return** a clear Arabic message instead of letting the action throw (kills the silent dead-button).
+2. Add a server-side `console.error("[team.create_member] …", { status, code, message })` on failure — **no secrets, no password** — so the real GoTrue status/message surfaces in Vercel runtime logs (this also gives **definitive confirmation** of the key defect on the next attempt).
+3. Replace the blanket `status === 422 ⇒ "already registered"` with precise mapping on `error.code`/message: `email_exists`/"already" ⇒ «هذا البريد مسجّل بالفعل.»; `weak_password` ⇒ password message; invalid email ⇒ email message; **401/403/invalid-key/not_admin ⇒ a config message** e.g. «تعذّر إنشاء الحساب — إعداد الخادم غير مكتمل. أبلغ المطوّر.» (a key/config fault becomes instantly distinguishable from a user-input fault); rate-limit ⇒ try-later; else generic + the server log.
+
+**C. Test coverage (closes the gap that hid this):** `e2e/rbac.spec.ts` seeds users by calling the admin SDK directly in `beforeAll` — it **never drives `createTeamMember`**, so the real path had zero automated coverage. Add an integration/e2e that exercises the actual action end-to-end.
+
+### Files
+- `app/(app)/team/actions.ts` — robust `try/catch` + diagnostic `console.error` + precise Arabic error mapping (core code fix). No change to `setMemberRole`/`setMemberActive` beyond optionally reusing the shared error map.
+- *(optional, tiny)* `app/(app)/team/add-member-form.tsx` — also render the returned error inline under the form (not just a toast), so a failure is unmissable. No logic change.
+- `scripts/verify-admin.ts` *(new, server-only; mirrors `scripts/bootstrap-admin.ts` / `verify-rls.ts`)* — builds the admin client from env and calls `auth.admin.listUsers({ perPage: 1 })`, printing `OK` / `FAIL <status>` only (**never the key**); operator runs `npx tsx scripts/verify-admin.ts` to validate any environment's key.
+- `e2e/team.spec.ts` *(new)* — drive the real flow: manager logs in → adds an **engineer** + an **accountant** via the form → both appear → each new account can **log in** → an **engineer** and an **accountant** are denied `/team` and cannot create staff → `audit_log` shows the `team.create_member` rows. Self-seeds + cleans up like the other specs.
+
+### Verification (Codex's required checks)
+1. `npx tsc --noEmit` + ESLint clean.
+2. `npx tsx scripts/verify-admin.ts` against local env ⇒ `OK`.
+3. Vitest + Playwright (auth + rbac + projects + tasks + invoices + **team**) green — including the new `team.spec.ts`.
+4. **Production proof:** after the operator sets the correct Vercel key and we redeploy, the manager on `…/team` creates an engineer + accountant; both log in; engineer/accountant can't add staff; `audit_log` shows the rows; Vercel runtime logs show **no** createUser error (and if anything fails again, the new diagnostic names the exact GoTrue status). `get_advisors` still no-ERROR.
+5. Confirm no `service_role` in any client bundle (`admin.ts` stays `server-only`; nothing under `NEXT_PUBLIC_*`).
+
+### Guardrails (per the bug-report brief)
+Do **not** start Phase 5. Touch **only** the team/staff-creation path + its test/diagnostic helpers — **no** changes to Tasks/Finance/Projects, RLS, or migrations (this is an env + error-handling fix; no DB migration needed). Keep Deployment Protection ON. **Commit/push/deploy only after approval.**
+
+### Status: diagnosed → **awaiting approval to implement** (no code written yet).
+
+---
+
 > Status: **Phases 0, 1, 1.5, 2, 3 complete & deployed.** Phase 0 (scaffold + Arabic RTL + PWA + Supabase clients); Phase 1 (Identity & RBAC — RLS on all tables, financials hard-locked, team + permissions admin, `audit_log`, bootstrap manager); Phase 1.5 (post-`/ui-review` RTL/mobile fixes); Phase 2 (Clients & Projects — migrations 0004–0007, `project_financials` isolated, engineer-JWT proves 0 financial rows, names-only `team_directory()`); Phase 3 (Tasks & lifecycle — migrations 0008–0009, `tasks`/`task_events` read-only to clients, 10 SECURITY DEFINER lifecycle functions, create lifecycle-safe, delete manager-only + audited, assignee = active engineer). Pushed to GitHub `Abdelrahman-Nashaat/osos-al-emaar`; **production live at `osos-al-emaar.vercel.app`** (`vercel.json` pins `framework:nextjs`; Deployment Protection ON; Phase 3 = commit `76f6fd2`, prod `dpl_GuG2BDy…`). **Current step:** Phase 4 (Finance — invoices / payments / collections / reports) **plan drafted, awaiting approval** (see “Phase 4 — Detailed Build Plan” below). Build runs as vertical slices, one phase at a time.
 > Brand: **شركة أسس الإعمار المتقدمة** — kept in one config constant (`lib/config/brand.ts`).
 > Chat language: replies in **English**; operator writes in Arabic. **App UI is Arabic-first, RTL, mobile-first.**

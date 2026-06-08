@@ -11,6 +11,7 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "verify:rls": "tsx scripts/verify-rls.ts",
+    "verify:admin": "tsx scripts/verify-admin.ts",
     "bootstrap": "tsx scripts/bootstrap-admin.ts"
   },
   "dependencies": {

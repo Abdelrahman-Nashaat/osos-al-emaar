@@ -47,10 +47,15 @@ export function AddMemberForm() {
           <option value="manager">مدير عام</option>
         </select>
       </div>
-      <div className="sm:col-span-2">
+      <div className="space-y-2 sm:col-span-2">
         <Button type="submit" disabled={pending}>
           {pending ? "جارٍ الإضافة…" : "إضافة موظف"}
         </Button>
+        {state.error ? (
+          <p className="text-sm text-destructive" role="alert">
+            {state.error}
+          </p>
+        ) : null}
       </div>
     </form>
   );
