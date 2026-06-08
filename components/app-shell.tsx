@@ -3,12 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  BarChart3,
   Building2,
   Contact,
   FolderKanban,
   LayoutDashboard,
   ListChecks,
   LogOut,
+  ReceiptText,
   ShieldCheck,
   Users,
 } from "lucide-react";
@@ -37,6 +39,8 @@ const NAV: NavItem[] = [
   { href: "/projects", label: "المشاريع", icon: FolderKanban, perm: "projects.view" },
   { href: "/tasks", label: "المهام", icon: ListChecks, perm: "tasks.view" },
   { href: "/clients", label: "العملاء", icon: Contact, perm: "clients.view" },
+  { href: "/invoices", label: "الفواتير", icon: ReceiptText, perm: "financials.view" },
+  { href: "/reports", label: "التقارير", icon: BarChart3, perm: "financials.view" },
   { href: "/team", label: "الفريق", icon: Users, perm: "team.manage" },
   { href: "/settings/permissions", label: "الصلاحيات", icon: ShieldCheck, perm: "permissions.manage" },
 ];

@@ -119,3 +119,19 @@
     @apply bg-background text-foreground font-sans;
   }
 }
+
+/* Print (→ save as PDF): hide app chrome + anything marked .no-print so an invoice
+   or report prints on its own. The browser handles Arabic RTL shaping natively. */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  header,
+  aside,
+  nav {
+    display: none !important;
+  }
+  main {
+    padding: 0 !important;
+  }
+}

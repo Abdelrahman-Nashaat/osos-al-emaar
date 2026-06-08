@@ -44,11 +44,24 @@ async function requireProjectEditor(): Promise<SessionProfile | null> {
   return can(perms, "projects.edit") ? session : null;
 }
 
-/** Manager-only actions (project delete, and ALL financial writes — RLS enforces this too). */
+/** Manager-only actions (project delete — RLS enforces this too). */
 async function requireManager(): Promise<SessionProfile | null> {
   const session = await getSessionProfile();
   if (!session || session.profile.role !== "manager") return null;
   return session;
+}
+
+/**
+ * Finance roles (manager + accountant) — maps to can_view_financials() at the DB.
+ * As of Phase 4 the accountant gets the finance UI, so project_financials writes
+ * are gated on financials.view (the project_financials RLS was relaxed to
+ * can_view_financials() in 0010). Engineers can never reach this (non-grantable).
+ */
+async function requireFinancials(): Promise<SessionProfile | null> {
+  const session = await getSessionProfile();
+  if (!session) return null;
+  const perms = await getEffectivePermissions();
+  return can(perms, "financials.view") ? session : null;
 }
 
 /**
@@ -151,14 +164,15 @@ function money(v: FormDataEntryValue | null): { ok: true; value: number | null }
 }
 
 /**
- * Set/clear a project's financials (budget / contract value / cost). MANAGER ONLY —
- * matches the project_financials RLS write policy (is_manager()). Engineers (even
- * granted projects.edit) can never reach this: the guard rejects them and RLS would
- * reject them too.
+ * Set/clear a project's financials (budget / contract value / cost). MANAGER +
+ * ACCOUNTANT (can_view_financials()) — matches the project_financials RLS write
+ * policy relaxed in 0010. Engineers (even granted projects.edit) can never reach
+ * this: financials.view is role-bound + non-grantable, and RLS rejects them too.
+ * Every edit (incl. the accountant's) writes audit_log below.
  */
 export async function setProjectFinancials(formData: FormData): Promise<ActionState> {
-  const session = await requireManager();
-  if (!session) return { error: "إدارة المبالغ للمدير العام فقط." };
+  const session = await requireFinancials();
+  if (!session) return { error: "إدارة المبالغ للمدير العام والمحاسب فقط." };
 
   const projectId = field(formData.get("project_id"));
   if (!projectId) return { error: "مشروع غير صالح." };

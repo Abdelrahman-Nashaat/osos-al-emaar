@@ -16,6 +16,8 @@ import { ProjectMembersEditor } from "../project-members-editor";
 import { ProjectFinancialsCard } from "../project-financials-card";
 import { DeleteProjectButton } from "../delete-project-button";
 import { ProjectTasksCard } from "./project-tasks-card";
+import { ProjectInvoicesCard } from "./project-invoices-card";
+import type { InvoiceStatus } from "@/lib/finance/invoice";
 
 export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -23,10 +25,12 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   const session = await getSessionProfile();
   if (!session) redirect("/login");
   const perms = await getEffectivePermissions();
-  if (!can(perms, "projects.view")) return <PermissionDenied />;
-
   const canEdit = can(perms, "projects.edit");
   const showFinancials = can(perms, "financials.view");
+  // Operational viewers (projects.view) OR finance viewers (manager/accountant) — the
+  // accountant reaches a project for financial context via an invoice/report link
+  // (they have no Projects nav). Engineers without projects.view are still denied.
+  if (!can(perms, "projects.view") && !showFinancials) return <PermissionDenied />;
   const isManager = session.profile.role === "manager";
   const canViewTasks = can(perms, "tasks.view");
   const canAssignTasks = can(perms, "tasks.assign");
@@ -102,16 +106,33 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     role: byId.get(uid)?.role ?? "",
   }));
 
-  // Financials — fetched ONLY when allowed. Engineers never reach this branch,
-  // so no amount is ever read or sent to them.
+  // Financials + invoices — fetched ONLY when allowed. Engineers never reach this
+  // branch, so no amount is ever read or sent to them.
   let financials = null;
+  let projectInvoices: {
+    id: string;
+    invoice_number: string;
+    total: number;
+    amount_paid: number;
+    status: InvoiceStatus;
+    due_date: string | null;
+    currency: string;
+  }[] = [];
   if (showFinancials) {
-    const { data } = await supabase
-      .from("project_financials")
-      .select("budget, contract_value, cost, currency, notes")
-      .eq("project_id", id)
-      .maybeSingle();
-    financials = data ?? null;
+    const [{ data: fin }, { data: inv }] = await Promise.all([
+      supabase
+        .from("project_financials")
+        .select("budget, contract_value, cost, currency, notes")
+        .eq("project_id", id)
+        .maybeSingle(),
+      supabase
+        .from("invoices")
+        .select("id, invoice_number, total, amount_paid, status, due_date, currency")
+        .eq("project_id", id)
+        .order("created_at", { ascending: false }),
+    ]);
+    financials = fin ?? null;
+    projectInvoices = inv ?? [];
   }
 
   // Pickers for the edit form + member assignment — only when the viewer can edit.
@@ -271,7 +292,16 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         <ProjectFinancialsCard
           projectId={project.id}
           financials={financials}
-          canEdit={isManager}
+          canEdit={showFinancials}
+        />
+      ) : null}
+
+      {/* Project invoices — manager + accountant only (same DOM-level gate) */}
+      {showFinancials ? (
+        <ProjectInvoicesCard
+          projectId={project.id}
+          projectName={project.name}
+          invoices={projectInvoices}
         />
       ) : null}
     </div>

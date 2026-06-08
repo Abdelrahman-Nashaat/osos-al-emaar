@@ -102,6 +102,215 @@ export type Database = {
           },
         ]
       }
+      invoice_events: {
+        Row: {
+          actor_id: string | null
+          amount: number | null
+          created_at: string
+          event_type: Database["public"]["Enums"]["invoice_event_type"]
+          from_status: Database["public"]["Enums"]["invoice_status"] | null
+          id: number
+          invoice_id: string
+          metadata: Json
+          note: string | null
+          to_status: Database["public"]["Enums"]["invoice_status"] | null
+        }
+        Insert: {
+          actor_id?: string | null
+          amount?: number | null
+          created_at?: string
+          event_type: Database["public"]["Enums"]["invoice_event_type"]
+          from_status?: Database["public"]["Enums"]["invoice_status"] | null
+          id?: never
+          invoice_id: string
+          metadata?: Json
+          note?: string | null
+          to_status?: Database["public"]["Enums"]["invoice_status"] | null
+        }
+        Update: {
+          actor_id?: string | null
+          amount?: number | null
+          created_at?: string
+          event_type?: Database["public"]["Enums"]["invoice_event_type"]
+          from_status?: Database["public"]["Enums"]["invoice_status"] | null
+          id?: never
+          invoice_id?: string
+          metadata?: Json
+          note?: string | null
+          to_status?: Database["public"]["Enums"]["invoice_status"] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_events_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_events_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoices: {
+        Row: {
+          amount_paid: number
+          client_id: string
+          created_at: string
+          created_by: string | null
+          currency: string
+          description: string | null
+          due_date: string | null
+          id: string
+          invoice_number: string
+          issue_date: string
+          notes: string | null
+          project_id: string
+          status: Database["public"]["Enums"]["invoice_status"]
+          subtotal: number
+          total: number
+          updated_at: string
+          vat_amount: number
+          vat_rate: number
+        }
+        Insert: {
+          amount_paid?: number
+          client_id: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          invoice_number: string
+          issue_date?: string
+          notes?: string | null
+          project_id: string
+          status?: Database["public"]["Enums"]["invoice_status"]
+          subtotal: number
+          total: number
+          updated_at?: string
+          vat_amount?: number
+          vat_rate?: number
+        }
+        Update: {
+          amount_paid?: number
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          invoice_number?: string
+          issue_date?: string
+          notes?: string | null
+          project_id?: string
+          status?: Database["public"]["Enums"]["invoice_status"]
+          subtotal?: number
+          total?: number
+          updated_at?: string
+          vat_amount?: number
+          vat_rate?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoices_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payments: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          invoice_id: string
+          is_reversed: boolean
+          method: Database["public"]["Enums"]["payment_method"]
+          notes: string | null
+          paid_at: string
+          recorded_by: string | null
+          reference: string | null
+          reversal_note: string | null
+          reversed_at: string | null
+          reversed_by: string | null
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          invoice_id: string
+          is_reversed?: boolean
+          method?: Database["public"]["Enums"]["payment_method"]
+          notes?: string | null
+          paid_at?: string
+          recorded_by?: string | null
+          reference?: string | null
+          reversal_note?: string | null
+          reversed_at?: string | null
+          reversed_by?: string | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          invoice_id?: string
+          is_reversed?: boolean
+          method?: Database["public"]["Enums"]["payment_method"]
+          notes?: string | null
+          paid_at?: string
+          recorded_by?: string | null
+          reference?: string | null
+          reversal_note?: string | null
+          reversed_at?: string | null
+          reversed_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_recorded_by_fkey"
+            columns: ["recorded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_reversed_by_fkey"
+            columns: ["reversed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
@@ -479,8 +688,61 @@ export type Database = {
         Returns: Database["public"]["Enums"]["app_role"]
       }
       has_perm: { Args: { perm_key: string }; Returns: boolean }
+      invoice_add_note: {
+        Args: { p_invoice: string; p_note: string }
+        Returns: undefined
+      }
+      invoice_create: {
+        Args: {
+          p_description?: string
+          p_due_date?: string
+          p_issue_date?: string
+          p_note?: string
+          p_project: string
+          p_subtotal: number
+          p_vat_rate?: number
+        }
+        Returns: string
+      }
+      invoice_delete: {
+        Args: { p_invoice: string; p_note?: string }
+        Returns: undefined
+      }
+      invoice_record_payment: {
+        Args: {
+          p_amount: number
+          p_invoice: string
+          p_method?: Database["public"]["Enums"]["payment_method"]
+          p_note?: string
+          p_paid_at?: string
+          p_reference?: string
+        }
+        Returns: string
+      }
+      invoice_send: {
+        Args: { p_invoice: string; p_note?: string }
+        Returns: undefined
+      }
+      invoice_update: {
+        Args: {
+          p_description?: string
+          p_due_date?: string
+          p_invoice: string
+          p_subtotal: number
+          p_vat_rate?: number
+        }
+        Returns: undefined
+      }
+      invoice_void: {
+        Args: { p_invoice: string; p_note?: string }
+        Returns: undefined
+      }
       is_accountant: { Args: never; Returns: boolean }
       is_manager: { Args: never; Returns: boolean }
+      payment_reverse: {
+        Args: { p_note?: string; p_payment: string }
+        Returns: undefined
+      }
       task_add_note: {
         Args: { p_note: string; p_task: string }
         Returns: undefined
@@ -538,6 +800,15 @@ export type Database = {
     }
     Enums: {
       app_role: "manager" | "engineer" | "accountant"
+      invoice_event_type:
+        | "created"
+        | "sent"
+        | "payment"
+        | "payment_reversed"
+        | "voided"
+        | "note"
+      invoice_status: "draft" | "sent" | "partially_paid" | "paid" | "void"
+      payment_method: "cash" | "bank_transfer" | "cheque" | "card" | "other"
       project_status:
         | "planning"
         | "active"
@@ -685,6 +956,16 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["manager", "engineer", "accountant"],
+      invoice_event_type: [
+        "created",
+        "sent",
+        "payment",
+        "payment_reversed",
+        "voided",
+        "note",
+      ],
+      invoice_status: ["draft", "sent", "partially_paid", "paid", "void"],
+      payment_method: ["cash", "bank_transfer", "cheque", "card", "other"],
       project_status: [
         "planning",
         "active",

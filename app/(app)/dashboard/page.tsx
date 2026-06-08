@@ -3,6 +3,9 @@ import { requireAuth, getEffectivePermissions } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { can } from "@/lib/auth/permission-keys";
 import { isTaskOverdue, TASK_EVENT_LABELS } from "@/lib/tasks/status";
+import { isInvoiceOverdue, outstanding } from "@/lib/finance/invoice";
+import { formatMoney } from "@/lib/projects/money";
+import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const ROLE_LABEL: Record<string, string> = {
@@ -15,6 +18,8 @@ export default async function DashboardPage() {
   const { profile, userId } = await requireAuth();
   const perms = await getEffectivePermissions();
   const isManager = profile.role === "manager";
+  const showFinance = can(perms, "financials.view");
+  const showTasks = can(perms, "tasks.view");
 
   return (
     <div className="space-y-6">
@@ -25,13 +30,72 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      {can(perms, "tasks.view") ? (
-        <TaskWidgets userId={userId} isManager={isManager} />
-      ) : (
+      {/* Finance widgets — manager + accountant only (amounts; engineers never reach this). */}
+      {showFinance ? <FinanceWidgets /> : null}
+
+      {showTasks ? <TaskWidgets userId={userId} isManager={isManager} /> : null}
+
+      {!showFinance && !showTasks ? (
         <div className="rounded-lg border border-border bg-card p-6 text-sm text-muted-foreground">
           لوحة التحكم قيد الإنشاء. ستظهر هنا إحصائيات إضافية في المراحل القادمة.
         </div>
-      )}
+      ) : null}
+    </div>
+  );
+}
+
+async function FinanceWidgets() {
+  const supabase = await createClient();
+  const [{ data: invoices }, { data: payments }] = await Promise.all([
+    supabase.from("invoices").select("status, issue_date, due_date, total, amount_paid"),
+    supabase.from("payments").select("amount, paid_at, is_reversed"),
+  ]);
+
+  const live = (invoices ?? []).filter((i) => i.status !== "void");
+  const today = new Date();
+  const monthFrom = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-01`;
+
+  const outstandingTotal = live.reduce((s, i) => s + outstanding(i.total, i.amount_paid), 0);
+  const overdue = live.filter((i) => isInvoiceOverdue(i.due_date, i.status));
+  const overdueAmount = overdue.reduce((s, i) => s + outstanding(i.total, i.amount_paid), 0);
+  const collectedMonth = (payments ?? [])
+    .filter((p) => !p.is_reversed && p.paid_at >= monthFrom)
+    .reduce((s, p) => s + p.amount, 0);
+  const invoicedMonth = live
+    .filter((i) => i.issue_date >= monthFrom)
+    .reduce((s, i) => s + i.total, 0);
+
+  const stats = [
+    { label: "إجمالي المتبقّي", value: formatMoney(outstandingTotal), href: "/invoices?filter=unpaid" },
+    { label: "محصّل هذا الشهر", value: formatMoney(collectedMonth), href: "/reports" },
+    {
+      label: `متأخر (${overdue.length})`,
+      value: formatMoney(overdueAmount),
+      href: "/invoices?filter=overdue",
+      danger: overdueAmount > 0,
+    },
+    { label: "فواتير هذا الشهر", value: formatMoney(invoicedMonth), href: "/invoices" },
+  ];
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {stats.map((s) => (
+        <Link
+          key={s.label}
+          href={s.href}
+          className="rounded-lg border border-border bg-card p-4 transition-colors hover:bg-muted"
+        >
+          <div className="text-xs text-muted-foreground">{s.label}</div>
+          <div
+            className={cn(
+              "mt-1 text-2xl font-bold tabular-nums",
+              s.danger ? "text-red-600 dark:text-red-400" : "",
+            )}
+          >
+            {s.value}
+          </div>
+        </Link>
+      ))}
     </div>
   );
 }

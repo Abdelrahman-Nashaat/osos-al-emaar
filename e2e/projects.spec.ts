@@ -173,7 +173,7 @@ test("a granted engineer can add a project but cannot delete it, write financial
     .eq("permission_key", "projects.edit");
 });
 
-test("accountant JWT reads clients + financials, but cannot write either", async () => {
+test("accountant JWT reads clients + financials; writes financials (Phase 4) but not clients", async () => {
   const c = await authedClient(acc.email, acc.password);
 
   const cl = await c.from("clients").select("id, name");
@@ -191,14 +191,17 @@ test("accountant JWT reads clients + financials, but cannot write either", async
   const afterClient = await admin.from("clients").select("name").eq("id", clientId).single();
   expect(afterClient.data?.name).toBe(CLIENT_NAME);
 
-  // UPDATE financials → blocked (manager-only write) → unchanged.
-  await c.from("project_financials").update({ budget: 1 }).eq("project_id", projectId);
+  // UPDATE financials → ALLOWED now: Phase 4 relaxed the write from is_manager() to
+  // can_view_financials() so the accountant gets the finance UI. (Write `cost` to
+  // prove it lands while leaving the seeded `budget` intact for the later UI tests.)
+  await c.from("project_financials").update({ cost: 12345 }).eq("project_id", projectId);
   const afterFin = await admin
     .from("project_financials")
-    .select("budget")
+    .select("budget, cost")
     .eq("project_id", projectId)
     .single();
-  expect(Number(afterFin.data?.budget)).toBe(BUDGET);
+  expect(Number(afterFin.data?.cost)).toBe(12345); // accountant write landed
+  expect(Number(afterFin.data?.budget)).toBe(BUDGET); // budget untouched
 });
 
 // ─────────────────────────── UI / role visibility ───────────────────────────
