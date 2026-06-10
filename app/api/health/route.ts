@@ -1,9 +1,15 @@
 import { NextResponse } from "next/server";
-import { getHealth } from "@/lib/health";
 
 export const dynamic = "force-dynamic";
 
-/** Phase 0 health endpoint: env presence + Supabase reachability. */
-export async function GET() {
-  return NextResponse.json(await getHealth());
+/**
+ * Public liveness probe — intentionally minimal (Phase 4.5 A6). Never expose env
+ * presence, key names, or upstream error detail on a public route; deep
+ * diagnostics live in the server-only scripts/verify-admin.ts.
+ */
+export function GET() {
+  return NextResponse.json(
+    { status: "ok" },
+    { headers: { "Cache-Control": "no-store" } },
+  );
 }

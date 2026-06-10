@@ -9,10 +9,12 @@ import { getSessionProfile, type SessionProfile } from "@/lib/auth/permissions";
 const ROLES = ["manager", "engineer", "accountant"] as const;
 type Role = (typeof ROLES)[number];
 
+// Password minimum is 12 while leaked-password protection is unavailable on the
+// Free plan (Phase 4.5 A7; the HIBP toggle arrives at the Pre-Launch Gate).
 const createSchema = z.object({
   fullName: z.string().trim().min(2),
   email: z.email(),
-  password: z.string().min(8),
+  password: z.string().min(12),
   role: z.enum(ROLES),
 });
 
@@ -57,7 +59,7 @@ function createUserErrorMessage(
     return "هذا البريد مسجّل بالفعل.";
   }
   if (code.includes("weak_password") || message.includes("password")) {
-    return "كلمة المرور ضعيفة. اختر كلمة مرور أقوى (٨ أحرف فأكثر).";
+    return "كلمة المرور ضعيفة. اختر كلمة مرور أقوى (١٢ حرفاً فأكثر).";
   }
   if (code.includes("email_address_invalid") || message.includes("email")) {
     return "البريد الإلكتروني غير صالح.";
@@ -95,7 +97,7 @@ export async function createTeamMember(
     role: formData.get("role"),
   });
   if (!parsed.success) {
-    return { error: "تحقق من الحقول: الاسم، وبريد صحيح، وكلمة مرور لا تقل عن ٨ أحرف." };
+    return { error: "تحقق من الحقول: الاسم، وبريد صحيح، وكلمة مرور لا تقل عن ١٢ حرفاً." };
   }
   const { fullName, email, password, role } = parsed.data;
 
@@ -217,13 +219,53 @@ export async function setMemberActive(userId: string, isActive: boolean): Promis
   const { error } = await supabase.from("profiles").update({ is_active: isActive }).eq("id", userId);
   if (error) return { error: "تعذّر تحديث الحالة." };
 
+  // Sync the auth-layer ban with the flag (S17): a deactivated employee must not
+  // keep a working refresh token or sign in again. The ≤1h residual access token
+  // is covered by the 0011 has_perm hardening. Failure here is logged + audited
+  // but does not undo the flag (the DB layer already denies the user everything).
+  let authBanSynced = false;
+  try {
+    const admin = createAdminClient();
+    const { error: banErr } = await admin.auth.admin.updateUserById(userId, {
+      ban_duration: isActive ? "none" : "87600h",
+    });
+    authBanSynced = !banErr;
+    if (banErr) {
+      console.error("[team.set_active] auth ban sync failed", {
+        status: (banErr as { status?: number }).status,
+        message: banErr.message,
+      });
+    }
+  } catch (err) {
+    console.error(
+      "[team.set_active] auth ban sync threw:",
+      err instanceof Error ? err.message : String(err),
+    );
+  }
+
   await supabase.from("audit_log").insert({
     actor_id: session.userId,
     action: "team.set_active",
     target_type: "profile",
     target_id: userId,
-    metadata: { is_active: isActive },
+    metadata: { is_active: isActive, auth_ban_synced: authBanSynced },
   });
   revalidatePath("/team");
-  return { success: isActive ? "تم تفعيل الحساب." : "تم تعطيل الحساب." };
+
+  // A failed unban on REACTIVATION would leave the employee unable to sign in
+  // while the manager sees plain success — surface it (security review LOW-1).
+  // A failed ban on deactivation is only informational: the DB layer and the
+  // login is_active check both deny the user regardless.
+  if (isActive) {
+    return {
+      success: authBanSynced
+        ? "تم تفعيل الحساب."
+        : "تم تفعيل الحساب، لكن تعذّرت مزامنة تسجيل الدخول — بدّل الحالة مرة أخرى إذا لم يستطع الموظف الدخول.",
+    };
+  }
+  return {
+    success: authBanSynced
+      ? "تم تعطيل الحساب."
+      : "تم تعطيل الحساب (تعذّر إنهاء الجلسات الحالية — الوصول ممنوع على مستوى قاعدة البيانات).",
+  };
 }

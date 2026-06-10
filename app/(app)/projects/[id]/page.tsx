@@ -140,8 +140,12 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   let clientOptions: { id: string; name: string }[] = [];
   if (canEdit) {
     const { data: cs } = await supabase.from("clients").select("id, name").order("name");
+    // «المهندسون المعيّنون» = ACTIVE ENGINEERS only (same rule the DB trigger
+    // project_members_engineer_guard enforces; mirrors taskEngineers below).
     for (const p of directory ?? []) {
-      if (p.is_active) assignable.push({ id: p.id, full_name: p.full_name, role: p.role });
+      if (p.role === "engineer" && p.is_active) {
+        assignable.push({ id: p.id, full_name: p.full_name, role: p.role });
+      }
     }
     clientOptions = cs ?? [];
   }

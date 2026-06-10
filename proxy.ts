@@ -5,6 +5,8 @@ import { getPublicEnv } from "@/lib/env";
 /**
  * Runs before every matched request: refreshes the Supabase session cookie and gates access.
  * Unauthenticated users are sent to /login; authenticated users on /login go to /dashboard.
+ * /account-disabled is reachable by any AUTHENTICATED user (it self-guards: active →
+ * /dashboard) so deactivated accounts can land there instead of looping (Phase 4.5 A4).
  * Real authorization is enforced by RLS + per-page permission checks — this is just routing.
  * (Next 16 "proxy" convention, formerly "middleware".)
  */

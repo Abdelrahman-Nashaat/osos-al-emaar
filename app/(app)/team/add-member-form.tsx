@@ -37,7 +37,7 @@ export function AddMemberForm() {
       </div>
       <div className="space-y-2">
         <Label htmlFor="password">كلمة المرور المبدئية</Label>
-        <Input id="password" name="password" type="text" dir="ltr" minLength={8} required />
+        <Input id="password" name="password" type="text" dir="ltr" minLength={12} required />
       </div>
       <div className="space-y-2">
         <Label htmlFor="role">الدور</Label>

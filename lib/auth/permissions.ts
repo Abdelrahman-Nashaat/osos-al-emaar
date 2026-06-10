@@ -12,22 +12,38 @@ import {
 export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 export type SessionProfile = { userId: string; profile: Profile };
 
-/** Current authenticated user + their active profile, or null. Cached per request. */
-export const getSessionProfile = cache(async (): Promise<SessionProfile | null> => {
+export type AuthState =
+  | { kind: "none" }
+  | { kind: "inactive" }
+  | { kind: "active"; session: SessionProfile };
+
+/**
+ * Distinguishes "no session" from "authenticated but deactivated" so deactivated
+ * users land on /account-disabled instead of looping /login⇄/dashboard
+ * (Phase 4.5 A4). A user without a profile row is treated as inactive too.
+ * Cached per request.
+ */
+export const getAuthState = cache(async (): Promise<AuthState> => {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return null;
+  if (!user) return { kind: "none" };
 
   const { data: profile } = await supabase
     .from("profiles")
     .select("*")
     .eq("id", user.id)
     .single();
-  if (!profile || !profile.is_active) return null;
+  if (!profile || !profile.is_active) return { kind: "inactive" };
 
-  return { userId: user.id, profile };
+  return { kind: "active", session: { userId: user.id, profile } };
+});
+
+/** Current authenticated user + their active profile, or null. Cached per request. */
+export const getSessionProfile = cache(async (): Promise<SessionProfile | null> => {
+  const state = await getAuthState();
+  return state.kind === "active" ? state.session : null;
 });
 
 /** Redirects to /login if there is no active session; otherwise returns it. */

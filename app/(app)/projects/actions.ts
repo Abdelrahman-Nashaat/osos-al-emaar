@@ -215,13 +215,29 @@ export async function addProjectMember(projectId: string, userId: string): Promi
   if (!isUuid(projectId) || !isUuid(userId)) return { error: "مدخل غير صالح." };
 
   const supabase = await createClient();
+
+  // Members must be ACTIVE ENGINEERS. Checked here for a friendly early message;
+  // the DB BEFORE INSERT trigger (0012 project_members_engineer_guard) is the
+  // real gate and raises invalid_member on every other write path.
+  const { data: directory } = await supabase.rpc("team_directory");
+  const target = (directory ?? []).find((p) => p.id === userId);
+  if (!target || target.role !== "engineer" || !target.is_active) {
+    return { error: "يُسمح بإضافة المهندسين النشطين فقط." };
+  }
+
   const { error } = await supabase
     .from("project_members")
     .upsert(
       { project_id: projectId, user_id: userId, added_by: session.userId },
       { onConflict: "project_id,user_id", ignoreDuplicates: true },
     );
-  if (error) return { error: "تعذّر إضافة العضو." };
+  if (error) {
+    return {
+      error: error.message.includes("invalid_member")
+        ? "يُسمح بإضافة المهندسين النشطين فقط."
+        : "تعذّر إضافة العضو.",
+    };
+  }
 
   await supabase.from("audit_log").insert({
     actor_id: session.userId,

@@ -209,7 +209,7 @@ test("manager: void (audited), delete empty draft, and NON-DESTRUCTIVE payment r
   // Send, fully pay (two payments), then reverse the first.
   await mc.rpc("invoice_send", { p_invoice: inv2 });
   const pay1 = (await mc.rpc("invoice_record_payment", { p_invoice: inv2, p_amount: 600 })).data as unknown as string;
-  await mc.rpc("invoice_record_payment", { p_invoice: inv2, p_amount: 400 });
+  const pay2 = (await mc.rpc("invoice_record_payment", { p_invoice: inv2, p_amount: 400 })).data as unknown as string;
   expect((await admin.from("invoices").select("status").eq("id", inv2).single()).data?.status).toBe("paid");
 
   // Reversal preserves the original row (NOT deleted) and recomputes the balance.
@@ -232,6 +232,13 @@ test("manager: void (audited), delete empty draft, and NON-DESTRUCTIVE payment r
   // Reversing an already-reversed payment → error.
   expect((await mc.rpc("payment_reverse", { p_payment: pay1 })).error).not.toBeNull();
 
+  // Approved ruling (0013): an invoice with LIVE (non-reversed) payments cannot be
+  // voided — reverse first, then void. "Collected" never sits on a voided invoice.
+  const voidBlocked = await mc.rpc("invoice_void", { p_invoice: inv2 });
+  expect(voidBlocked.error?.message ?? "").toContain("has_live_payments");
+  expect((await mc.rpc("payment_reverse", { p_payment: pay2 })).error).toBeNull();
+  expect((await admin.from("invoices").select("status").eq("id", inv2).single()).data?.status).toBe("sent");
+
   // Void → ok + audited; then record-payment and edit are both illegal on a void invoice.
   expect((await mc.rpc("invoice_void", { p_invoice: inv2 })).error).toBeNull();
   row = await admin.from("invoices").select("status").eq("id", inv2).single();
@@ -241,6 +248,76 @@ test("manager: void (audited), delete empty draft, and NON-DESTRUCTIVE payment r
   ).toBeGreaterThan(0);
   expect((await mc.rpc("invoice_record_payment", { p_invoice: inv2, p_amount: 10 })).error).not.toBeNull();
   expect((await mc.rpc("invoice_update", { p_invoice: inv2, p_subtotal: 5 })).error).not.toBeNull();
+});
+
+test("issued-only accounting: drafts and void never count in dashboard or reports (A1)", async ({
+  page,
+}) => {
+  // Isolated project so the /reports per-project row is exact regardless of the
+  // other tests' invoices on the shared project.
+  const REPORT_PROJECT = `مشروع كشوف ${ts}`;
+  const { data: p2 } = await admin
+    .from("projects")
+    .insert({ name: REPORT_PROJECT, client_id: clientId, status: "active", created_by: mgrId })
+    .select("id")
+    .single();
+  const proj2 = p2?.id ?? "";
+  await admin
+    .from("project_financials")
+    .insert({ project_id: proj2, contract_value: 10000, updated_by: mgrId });
+
+  const mc = await authedClient(mgr.email, mgr.password);
+  const mkInv = async (subtotal: number) => {
+    const { data, error } = await mc.rpc("invoice_create", {
+      p_project: proj2,
+      p_subtotal: subtotal,
+      p_vat_rate: 0,
+    });
+    if (error) throw error;
+    return data as unknown as string;
+  };
+
+  // draft 9,876,543 (counts NOWHERE) · sent 2,000 · partially_paid 500 (paid 200)
+  // · void 3,000 (counts nowhere).
+  await mkInv(9876543);
+  const sentInv = await mkInv(2000);
+  await mc.rpc("invoice_send", { p_invoice: sentInv });
+  const partInv = await mkInv(500);
+  await mc.rpc("invoice_send", { p_invoice: partInv });
+  await mc.rpc("invoice_record_payment", { p_invoice: partInv, p_amount: 200 });
+  const voidInv = await mkInv(3000);
+  await mc.rpc("invoice_send", { p_invoice: voidInv });
+  await mc.rpc("invoice_void", { p_invoice: voidInv }); // no payments → voidable
+
+  try {
+    await login(page, mgr.email, mgr.password);
+
+    // Dashboard money KPIs never include the draft's distinctive amount.
+    await page.goto("/dashboard");
+    await expect(page.locator("body")).not.toContainText("9,876,543");
+
+    // Reports per-project row (all periods): issued only →
+    // invoiced 2,500 · collected 200 · remaining-to-invoice 10,000 − 2,500 = 7,500.
+    await page.goto("/reports?period=all");
+    const row = page.getByRole("row", { name: new RegExp(REPORT_PROJECT) });
+    await expect(row).toContainText("2,500");
+    await expect(row).toContainText("7,500");
+    await expect(row).not.toContainText("9,876,543");
+    await expect(page.locator("body")).not.toContainText("9,876,543");
+
+    // The draft still exists as workflow state in the invoices list.
+    await page.goto("/invoices?filter=draft");
+    await expect(page.getByText("9,876,543").first()).toBeVisible();
+  } finally {
+    const { data: invs2 } = await admin.from("invoices").select("id").eq("project_id", proj2);
+    const ids2 = (invs2 ?? []).map((i) => i.id);
+    if (ids2.length) {
+      await admin.from("payments").delete().in("invoice_id", ids2);
+      await admin.from("invoices").delete().in("id", ids2);
+    }
+    await admin.from("project_financials").delete().eq("project_id", proj2);
+    await admin.from("projects").delete().eq("id", proj2);
+  }
 });
 
 // ─────────────────────────── UI / role visibility ───────────────────────────

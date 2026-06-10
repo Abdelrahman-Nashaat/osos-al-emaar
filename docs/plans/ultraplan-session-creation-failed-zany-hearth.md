@@ -45,7 +45,12 @@ The exact on-screen string **«تعذّر إنشاء الحساب.»** is return
 ### Guardrails (per the bug-report brief)
 Do **not** start Phase 5. Touch **only** the team/staff-creation path + its test/diagnostic helpers — **no** changes to Tasks/Finance/Projects, RLS, or migrations (this is an env + error-handling fix; no DB migration needed). Keep Deployment Protection ON. **Commit/push/deploy only after approval.**
 
-### Status: diagnosed → **awaiting approval to implement** (no code written yet).
+> **Phase 4.5 (Production Stabilization & Hardening) is ACTIVE** — approved plan + execution record: `docs/plans/we-are-starting-phase-streamed-hollerith.md`. Environment ruling: the current Supabase + Vercel deployment are **staging/demo** (no real data); production provisioning/cutover deferred to a Production Launch phase. Slice A (accounting correctness + authz/security: issued-only money figures, engineer-only project members, deactivated-user hardening incl. session ban, account-disabled flow, security headers + CSP-Report-Only, minimal /api/health, password min 12, SECURITY DEFINER review doc, migrations 0011–0013) built & fully gated (vitest 42 · Playwright 41).
+
+### Status: code shipped → **awaiting the operator's Vercel key fix + final production verify.**
+Committed **`c016012`** (pushed to `main`); hardened + diagnostic build **deployed to production** (`dpl_9hFUv9Qu…`, aliased `osos-al-emaar.vercel.app`, Deployment Protection ON). Local gate green: tsc + ESLint clean · vitest **40** · **Playwright 32** (incl. the new `e2e/team.spec.ts` driving the real add-staff UI) · `verify:admin` **OK** for the local key.
+
+**Next (operator — the actual unblock):** in Vercel → project `osos-al-emaar` → Settings → Environment Variables, set `SUPABASE_SERVICE_ROLE_KEY` for **Production + Preview** to the **`service_role` secret** from Supabase → project `anqrrhqjkmvaymvkdjtj` → Settings → API (the long `eyJ…` JWT with role `service_role` — **not** the `anon` key, **not** a `sb_…` publishable/secret key), and confirm `NEXT_PUBLIC_SUPABASE_URL` there is `https://anqrrhqjkmvaymvkdjtj.supabase.co` (same project). Then redeploy (`npx vercel deploy --prod --yes`) and add a staff member on `…/team` — it should now succeed; if anything still fails, the new server log names the exact GoTrue status. (Optional pre-fix confirmation: reproduce once on the current live build and read the exact 401/403 from Vercel runtime logs.)
 
 ---
 

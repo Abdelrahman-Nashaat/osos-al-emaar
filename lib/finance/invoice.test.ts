@@ -8,7 +8,9 @@ import {
   PAYMENT_METHOD_LABELS,
   INVOICE_EVENT_LABELS,
   VAT_RATES,
+  ISSUED_STATUSES,
   isInvoiceOverdue,
+  isIssued,
   outstanding,
   agingBucket,
   nextInvoiceActions,
@@ -33,6 +35,23 @@ describe("isInvoiceOverdue", () => {
     expect(isInvoiceOverdue("2026-07-01", "sent", NOW)).toBe(false);
     expect(isInvoiceOverdue(null, "sent", NOW)).toBe(false);
     expect(isInvoiceOverdue(undefined, "partially_paid", NOW)).toBe(false);
+  });
+});
+
+describe("isIssued (Phase 4.5 A1 — drafts/void never count as revenue)", () => {
+  it("only sent/partially_paid/paid are issued receivables", () => {
+    expect(isIssued("sent")).toBe(true);
+    expect(isIssued("partially_paid")).toBe(true);
+    expect(isIssued("paid")).toBe(true);
+    expect(isIssued("draft")).toBe(false);
+    expect(isIssued("void")).toBe(false);
+  });
+
+  it("ISSUED_STATUSES is exactly sent/partially_paid/paid and a subset of the DB enum", () => {
+    expect([...ISSUED_STATUSES]).toEqual(["sent", "partially_paid", "paid"]);
+    for (const s of ISSUED_STATUSES) {
+      expect(Constants.public.Enums.invoice_status).toContain(s);
+    }
   });
 });
 

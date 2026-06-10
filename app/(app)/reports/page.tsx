@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { getEffectivePermissions, getSessionProfile } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { can } from "@/lib/auth/permission-keys";
-import { isInvoiceOverdue, outstanding } from "@/lib/finance/invoice";
+import { isInvoiceOverdue, isIssued, outstanding } from "@/lib/finance/invoice";
 import { formatMoney } from "@/lib/projects/money";
 import { cn } from "@/lib/utils";
 import { PermissionDenied } from "@/components/permission-denied";
@@ -91,7 +91,9 @@ export default async function ReportsPage({
   ]);
 
   const invList = invoices ?? [];
-  const liveInvoices = invList.filter((i) => i.status !== "void");
+  // Money aggregates count ISSUED invoices only (sent/partially_paid/paid) —
+  // drafts and void never inflate revenue/outstanding (Phase 4.5 A1).
+  const issuedInvoices = invList.filter((i) => isIssued(i.status));
   const invoiceById = new Map(invList.map((i) => [i.id, i] as const));
   const clientName = new Map((clients ?? []).map((c) => [c.id, c.name] as const));
   const projectName = new Map((projects ?? []).map((p) => [p.id, p.name] as const));
@@ -99,22 +101,28 @@ export default async function ReportsPage({
     (financials ?? []).map((f) => [f.project_id, f.contract_value] as const),
   );
 
-  // Revenue summary — invoiced & collected are period-bound; outstanding & overdue are now.
-  const invoicedPeriod = liveInvoices
+  // Revenue summary — invoiced & collected are period-bound; outstanding & overdue
+  // are now. Collected counts non-reversed payments on ISSUED invoices only
+  // (consistent with the dashboard — S18).
+  const invoicedPeriod = issuedInvoices
     .filter((i) => inPeriod(i.issue_date))
     .reduce((s, i) => s + i.total, 0);
   const collectedPeriod = (payments ?? [])
-    .filter((p) => !p.is_reversed && inPeriod(p.paid_at))
+    .filter((p) => {
+      if (p.is_reversed || !inPeriod(p.paid_at)) return false;
+      const inv = invoiceById.get(p.invoice_id);
+      return inv != null && isIssued(inv.status);
+    })
     .reduce((s, p) => s + p.amount, 0);
-  const outstandingNow = liveInvoices.reduce((s, i) => s + outstanding(i.total, i.amount_paid), 0);
-  const overdueNow = liveInvoices
+  const outstandingNow = issuedInvoices.reduce((s, i) => s + outstanding(i.total, i.amount_paid), 0);
+  const overdueNow = issuedInvoices
     .filter((i) => isInvoiceOverdue(i.due_date, i.status))
     .reduce((s, i) => s + outstanding(i.total, i.amount_paid), 0);
 
-  // Per-client & per-project (all-time snapshot).
+  // Per-client & per-project (all-time snapshot, issued invoices only).
   const byClient = new Map<string, Agg>();
   const byProject = new Map<string, Agg>();
-  for (const i of liveInvoices) {
+  for (const i of issuedInvoices) {
     bump(byClient, i.client_id, "invoiced", i.total);
     bump(byClient, i.client_id, "outstanding", outstanding(i.total, i.amount_paid));
     bump(byProject, i.project_id, "invoiced", i.total);
@@ -123,7 +131,7 @@ export default async function ReportsPage({
   for (const p of payments ?? []) {
     if (p.is_reversed) continue;
     const inv = invoiceById.get(p.invoice_id);
-    if (!inv || inv.status === "void") continue;
+    if (!inv || !isIssued(inv.status)) continue;
     bump(byClient, inv.client_id, "collected", p.amount);
     bump(byProject, inv.project_id, "collected", p.amount);
   }

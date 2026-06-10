@@ -34,6 +34,22 @@ export const INVOICE_STATUS_BADGE: Record<InvoiceStatus, string> = {
   void: "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300",
 };
 
+/**
+ * Statuses that represent a real, ISSUED receivable. Only these may count toward
+ * revenue / outstanding / aging / contract-remaining aggregates: drafts are not
+ * receivables yet and void invoices are cancelled — neither may ever inflate a
+ * money KPI (Phase 4.5 A1).
+ */
+export const ISSUED_STATUSES = [
+  "sent",
+  "partially_paid",
+  "paid",
+] as const satisfies readonly InvoiceStatus[];
+
+export function isIssued(status: InvoiceStatus): boolean {
+  return (ISSUED_STATUSES as readonly InvoiceStatus[]).includes(status);
+}
+
 export const PAYMENT_METHODS = [
   "cash",
   "bank_transfer",

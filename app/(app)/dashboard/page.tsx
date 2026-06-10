@@ -3,7 +3,7 @@ import { requireAuth, getEffectivePermissions } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { can } from "@/lib/auth/permission-keys";
 import { isTaskOverdue, TASK_EVENT_LABELS } from "@/lib/tasks/status";
-import { isInvoiceOverdue, outstanding } from "@/lib/finance/invoice";
+import { isInvoiceOverdue, isIssued, outstanding } from "@/lib/finance/invoice";
 import { formatMoney } from "@/lib/projects/money";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -47,21 +47,25 @@ export default async function DashboardPage() {
 async function FinanceWidgets() {
   const supabase = await createClient();
   const [{ data: invoices }, { data: payments }] = await Promise.all([
-    supabase.from("invoices").select("status, issue_date, due_date, total, amount_paid"),
-    supabase.from("payments").select("amount, paid_at, is_reversed"),
+    supabase.from("invoices").select("id, status, issue_date, due_date, total, amount_paid"),
+    supabase.from("payments").select("invoice_id, amount, paid_at, is_reversed"),
   ]);
 
-  const live = (invoices ?? []).filter((i) => i.status !== "void");
+  // Money KPIs count ISSUED invoices only (sent/partially_paid/paid) — drafts are
+  // not receivables and void is cancelled. Collected = non-reversed payments on
+  // issued invoices, matching /reports (Phase 4.5 A1/S18).
+  const issued = (invoices ?? []).filter((i) => isIssued(i.status));
+  const issuedIds = new Set(issued.map((i) => i.id));
   const today = new Date();
   const monthFrom = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-01`;
 
-  const outstandingTotal = live.reduce((s, i) => s + outstanding(i.total, i.amount_paid), 0);
-  const overdue = live.filter((i) => isInvoiceOverdue(i.due_date, i.status));
+  const outstandingTotal = issued.reduce((s, i) => s + outstanding(i.total, i.amount_paid), 0);
+  const overdue = issued.filter((i) => isInvoiceOverdue(i.due_date, i.status));
   const overdueAmount = overdue.reduce((s, i) => s + outstanding(i.total, i.amount_paid), 0);
   const collectedMonth = (payments ?? [])
-    .filter((p) => !p.is_reversed && p.paid_at >= monthFrom)
+    .filter((p) => !p.is_reversed && issuedIds.has(p.invoice_id) && p.paid_at >= monthFrom)
     .reduce((s, p) => s + p.amount, 0);
-  const invoicedMonth = live
+  const invoicedMonth = issued
     .filter((i) => i.issue_date >= monthFrom)
     .reduce((s, i) => s + i.total, 0);
 

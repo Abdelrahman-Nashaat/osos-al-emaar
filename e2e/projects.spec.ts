@@ -138,6 +138,37 @@ test("engineer JWT cannot write projects / clients / financials / members", asyn
   expect(memIns.error).not.toBeNull();
 });
 
+test("project members are ACTIVE ENGINEERS only — the DB trigger rejects everyone else (A2)", async () => {
+  const mc = await authedClient(mgr.email, mgr.password);
+
+  // A manager (full projects.edit) still cannot add an ACCOUNTANT…
+  const accIns = await mc
+    .from("project_members")
+    .insert({ project_id: projectId, user_id: accId, added_by: mgrId });
+  expect(accIns.error?.message ?? "").toContain("invalid_member");
+
+  // …or a MANAGER.
+  const mgrIns = await mc
+    .from("project_members")
+    .insert({ project_id: projectId, user_id: mgrId, added_by: mgrId });
+  expect(mgrIns.error?.message ?? "").toContain("invalid_member");
+
+  // An ACTIVE engineer is accepted (the normal path)…
+  const engIns = await mc
+    .from("project_members")
+    .insert({ project_id: projectId, user_id: engId, added_by: mgrId });
+  expect(engIns.error).toBeNull();
+  await mc.from("project_members").delete().eq("project_id", projectId).eq("user_id", engId);
+
+  // …but an INACTIVE engineer is rejected.
+  await admin.from("profiles").update({ is_active: false }).eq("id", engId);
+  const inactiveIns = await mc
+    .from("project_members")
+    .insert({ project_id: projectId, user_id: engId, added_by: mgrId });
+  expect(inactiveIns.error?.message ?? "").toContain("invalid_member");
+  await admin.from("profiles").update({ is_active: true }).eq("id", engId);
+});
+
 test("a granted engineer can add a project but cannot delete it, write financials, or read amounts", async () => {
   await admin
     .from("user_permission_overrides")
@@ -255,4 +286,48 @@ test("accountant sees Clients (read-only) and is denied on Projects", async ({ p
 
   await page.goto("/projects");
   await expect(page.getByText("لا تملك صلاحية الوصول")).toBeVisible();
+});
+
+test("member picker offers only active engineers (A2)", async ({ page }) => {
+  await login(page, mgr.email, mgr.password);
+  await page.goto(`/projects/${projectId}`);
+
+  const picker = page.getByLabel("إضافة مهندس للمشروع");
+  await expect(picker).toBeVisible();
+  const optionTexts = await picker.locator("option").allTextContents();
+  expect(optionTexts.some((t) => t.includes(eng.name))).toBe(true);
+  expect(optionTexts.some((t) => t.includes(acc.name))).toBe(false);
+  expect(optionTexts.some((t) => t.includes(mgr.name))).toBe(false);
+});
+
+// LAST in this file: temporarily deactivates the engineer (restored at the end).
+test("a DEACTIVATED engineer keeps NO access — even with a permission override (S16/0011)", async () => {
+  await admin
+    .from("user_permission_overrides")
+    .insert({ user_id: engId, permission_key: "projects.edit", allowed: true });
+
+  // Capture a valid JWT while still active (the real-world leak window).
+  const c = await authedClient(eng.email, eng.password);
+  await admin.from("profiles").update({ is_active: false }).eq("id", engId);
+
+  try {
+    // has_perm is false for EVERY key — the override no longer leaks through.
+    expect((await c.rpc("has_perm", { perm_key: "projects.edit" })).data).toBe(false);
+
+    // Direct writes denied; operational reads gone; the directory is gated.
+    const ins = await c
+      .from("projects")
+      .insert({ name: `RLS معطّل ${ts}`, status: "planning", progress: 0 })
+      .select("id");
+    expect(ins.error).not.toBeNull();
+    expect((await c.from("clients").select("id")).data ?? []).toHaveLength(0);
+    expect(((await c.rpc("team_directory")).data ?? []).length).toBe(0);
+  } finally {
+    await admin.from("profiles").update({ is_active: true }).eq("id", engId);
+    await admin
+      .from("user_permission_overrides")
+      .delete()
+      .eq("user_id", engId)
+      .eq("permission_key", "projects.edit");
+  }
 });
