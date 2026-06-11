@@ -21,6 +21,7 @@ export const PERMISSION_KEYS = [
   "portfolio.edit",
   "offers.view",
   "offers.edit",
+  "settings.manage",
 ] as const;
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];
@@ -85,4 +86,5 @@ export const PERMISSION_LABELS: Record<PermissionKey, string> = {
   "portfolio.edit": "تعديل معرض الأعمال",
   "offers.view": "عرض العروض",
   "offers.edit": "تعديل العروض",
+  "settings.manage": "إعدادات المكتب",
 };

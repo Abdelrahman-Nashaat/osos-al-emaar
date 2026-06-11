@@ -13,6 +13,11 @@ const CSV_ENTITIES: { id: string; label: string }[] = [
   { id: "invoices", label: "الفواتير" },
   { id: "payments", label: "الدفعات" },
   { id: "invoice_events", label: "سجل الفواتير" },
+  { id: "offers", label: "العروض" },
+  { id: "offer_events", label: "سجل العروض" },
+  { id: "attachments", label: "بيانات المرفقات" },
+  { id: "portfolio_items", label: "معرض الأعمال" },
+  { id: "office_settings", label: "إعدادات المكتب" },
   { id: "profiles", label: "الفريق" },
   { id: "audit_log", label: "سجل التدقيق" },
 ];

@@ -82,7 +82,7 @@ export default async function ReportsPage({
       "reports.invoices",
       supabase
         .from("invoices")
-        .select("id, client_id, project_id, status, issue_date, due_date, total, amount_paid"),
+        .select("id, client_id, project_id, status, issue_date, due_date, total, amount_paid, vat_amount"),
     ),
     must("reports.payments", supabase.from("payments").select("invoice_id, amount, paid_at, is_reversed")),
     must("reports.clients", supabase.from("clients").select("id, name")),
@@ -107,6 +107,11 @@ export default async function ReportsPage({
   const invoicedPeriod = issuedInvoices
     .filter((i) => inPeriod(i.issue_date))
     .reduce((s, i) => s + i.total, 0);
+  // VAT charged on issued invoices in the period — a bookkeeping aid for the
+  // quarterly filing (ملخص وليس إقراراً).
+  const vatPeriod = issuedInvoices
+    .filter((i) => inPeriod(i.issue_date))
+    .reduce((s, i) => s + i.vat_amount, 0);
   const collectedPeriod = payments
     .filter((p) => {
       if (p.is_reversed || !inPeriod(p.paid_at)) return false;
@@ -193,6 +198,11 @@ export default async function ReportsPage({
           <Stat label="المُحصّل (الفترة)" value={formatMoney(collectedPeriod)} />
           <Stat label="إجمالي المتبقّي (الآن)" value={formatMoney(outstandingNow)} />
           <Stat label="المتأخر (الآن)" value={formatMoney(overdueNow)} highlight={overdueNow > 0} />
+          <Stat
+            label="ضريبة القيمة المضافة على فواتير الفترة"
+            value={formatMoney(vatPeriod)}
+            hint="مجموع الضريبة على الفواتير الصادرة في الفترة — للاستئناس عند الإقرار"
+          />
         </CardContent>
       </Card>
 
@@ -343,13 +353,15 @@ function Stat({
   label,
   value,
   highlight,
+  hint,
 }: {
   label: string;
   value: string;
   highlight?: boolean;
+  hint?: string;
 }) {
   return (
-    <div className="rounded-lg border border-border p-3">
+    <div className="rounded-lg border border-border p-3" title={hint}>
       <div className="text-xs text-muted-foreground">{label}</div>
       <div
         className={cn(
@@ -359,6 +371,7 @@ function Stat({
       >
         {value}
       </div>
+      {hint ? <p className="mt-1 text-[10px] leading-4 text-muted-foreground">{hint}</p> : null}
     </div>
   );
 }

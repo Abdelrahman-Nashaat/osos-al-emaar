@@ -14,10 +14,23 @@ export default async function TeamPage() {
   if (!can(perms, "team.manage")) return <PermissionDenied />;
 
   const supabase = await createClient();
-  const { data: members } = await supabase
-    .from("profiles")
-    .select("id, full_name, email, role, is_active")
-    .order("created_at", { ascending: true });
+  const [{ data: members }, { data: openTasks }] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("id, full_name, email, role, is_active")
+      .order("created_at", { ascending: true }),
+    // Task load per member («task load» from the client requirements).
+    supabase.from("tasks").select("current_assignee_id, status").neq("status", "closed"),
+  ]);
+  const loadById = new Map<string, number>();
+  for (const t of openTasks ?? []) {
+    if (!t.current_assignee_id) continue;
+    loadById.set(t.current_assignee_id, (loadById.get(t.current_assignee_id) ?? 0) + 1);
+  }
+  const memberRows = (members ?? []).map((m) => ({
+    ...m,
+    open_tasks: loadById.get(m.id) ?? 0,
+  }));
 
   return (
     <div className="space-y-6">
@@ -42,7 +55,7 @@ export default async function TeamPage() {
           <CardTitle className="text-base">أعضاء الفريق</CardTitle>
         </CardHeader>
         <CardContent>
-          <TeamTable members={members ?? []} currentUserId={session.userId} />
+          <TeamTable members={memberRows} currentUserId={session.userId} />
         </CardContent>
       </Card>
     </div>

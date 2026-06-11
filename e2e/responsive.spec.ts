@@ -189,24 +189,52 @@ test("manager bottom nav: 3 primaries + «المزيد» sheet navigates and hig
   await expect(page.locator("#more-sheet")).toBeHidden();
 });
 
-test("engineer bottom nav is 3 flat items with no «المزيد» @mobile", async ({ page }) => {
+test("engineer bottom nav: 3 primaries + «المزيد» with calendar/portfolio (no finance) @mobile", async ({
+  page,
+}) => {
   await login(page, eng.email, eng.password);
   const nav = bottomNav(page);
   await expect(nav.getByRole("link", { name: "الرئيسية" })).toBeVisible();
   await expect(nav.getByRole("link", { name: "المشاريع" })).toBeVisible();
   await expect(nav.getByRole("link", { name: "المهام" })).toBeVisible();
-  await expect(nav.getByRole("button", { name: "المزيد" })).toHaveCount(0);
+  const more = nav.getByRole("button", { name: "المزيد" });
+  await expect(more).toBeVisible();
+
+  // The sheet holds the product-completion modules — and NEVER finance/offers.
+  await more.click();
+  const sheet = page.locator("#more-sheet");
+  await expect(sheet).toBeVisible();
+  for (const label of ["التقويم", "معرض الأعمال"]) {
+    await expect(sheet.getByRole("link", { name: label })).toBeVisible();
+  }
+  for (const label of ["الفواتير", "التقارير", "العروض"]) {
+    await expect(sheet.getByRole("link", { name: label })).toHaveCount(0);
+  }
+  await page.keyboard.press("Escape");
+  await expect(sheet).toBeHidden();
 });
 
-test("accountant nav is exactly 4 flat items (≤4 rule → no «المزيد») @mobile", async ({
+test("accountant bottom nav: 3 primaries + «المزيد» (no projects/tasks/team) @mobile", async ({
   page,
 }) => {
   await login(page, acc.email, acc.password);
   const nav = bottomNav(page);
-  for (const label of ["الرئيسية", "العملاء", "الفواتير", "التقارير"]) {
+  for (const label of ["الرئيسية", "الفواتير", "التقارير"]) {
     await expect(nav.getByRole("link", { name: label })).toBeVisible();
   }
-  await expect(nav.getByRole("button", { name: "المزيد" })).toHaveCount(0);
+  const more = nav.getByRole("button", { name: "المزيد" });
+  await expect(more).toBeVisible();
+  await more.click();
+  const sheet = page.locator("#more-sheet");
+  await expect(sheet).toBeVisible();
+  for (const label of ["العملاء", "العروض", "التقويم", "معرض الأعمال"]) {
+    await expect(sheet.getByRole("link", { name: label })).toBeVisible();
+  }
+  for (const label of ["المشاريع", "المهام", "الفريق", "الصلاحيات"]) {
+    await expect(sheet.getByRole("link", { name: label })).toHaveCount(0);
+  }
+  await page.keyboard.press("Escape");
+  await expect(sheet).toBeHidden();
 });
 
 test("engineer project detail and tasks have no overflow and no amounts @mobile", async ({

@@ -6,14 +6,18 @@ import { usePathname } from "next/navigation";
 import {
   BarChart3,
   Building2,
+  CalendarDays,
   Contact,
   DatabaseBackup,
+  FileSignature,
   FolderKanban,
+  Images,
   LayoutDashboard,
   ListChecks,
   LogOut,
   MoreHorizontal,
   ReceiptText,
+  Settings2,
   ShieldCheck,
   Users,
 } from "lucide-react";
@@ -21,6 +25,7 @@ import { brand } from "@/lib/config/brand";
 import { cn } from "@/lib/utils";
 import { usePermissions } from "@/components/auth/permissions-provider";
 import { signOut } from "@/app/(app)/actions";
+import { NotificationsBell } from "@/components/notifications-bell";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -36,17 +41,23 @@ type NavItem = {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   perm?: string;
+  /** Show when ANY of these keys is granted (e.g. التقويم for tasks OR finance). */
+  anyPerm?: string[];
 };
 
 const NAV: NavItem[] = [
   { href: "/dashboard", label: "الرئيسية", icon: LayoutDashboard },
+  { href: "/calendar", label: "التقويم", icon: CalendarDays, anyPerm: ["tasks.view", "financials.view"] },
   { href: "/projects", label: "المشاريع", icon: FolderKanban, perm: "projects.view" },
   { href: "/tasks", label: "المهام", icon: ListChecks, perm: "tasks.view" },
+  { href: "/offers", label: "العروض", icon: FileSignature, perm: "offers.view" },
   { href: "/clients", label: "العملاء", icon: Contact, perm: "clients.view" },
   { href: "/invoices", label: "الفواتير", icon: ReceiptText, perm: "financials.view" },
   { href: "/reports", label: "التقارير", icon: BarChart3, perm: "financials.view" },
+  { href: "/portfolio", label: "معرض الأعمال", icon: Images, perm: "portfolio.view" },
   { href: "/team", label: "الفريق", icon: Users, perm: "team.manage" },
   { href: "/settings/permissions", label: "الصلاحيات", icon: ShieldCheck, perm: "permissions.manage" },
+  { href: "/settings/office", label: "إعدادات المكتب", icon: Settings2, perm: "settings.manage" },
   { href: "/settings/backup", label: "النسخ الاحتياطي", icon: DatabaseBackup, perm: "team.manage" },
 ];
 
@@ -75,7 +86,10 @@ export function AppShell({
   const perms = usePermissions();
   const [moreOpen, setMoreOpen] = useState(false);
 
-  const items = NAV.filter((item) => !item.perm || perms[item.perm] === true);
+  const items = NAV.filter((item) => {
+    if (item.anyPerm) return item.anyPerm.some((p) => perms[p] === true);
+    return !item.perm || perms[item.perm] === true;
+  });
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
 
   const primaryHrefs = PRIMARY[role] ?? [];
@@ -105,6 +119,7 @@ export function AppShell({
         <div className="flex items-center gap-2">
           <span className="hidden text-sm font-medium sm:inline">{userName}</span>
           <Badge variant="secondary">{ROLE_LABEL[role] ?? role}</Badge>
+          <NotificationsBell />
           <form action={signOut}>
             <Button type="submit" variant="ghost" size="icon" className="size-10" aria-label="تسجيل الخروج">
               <LogOut className="size-4" />

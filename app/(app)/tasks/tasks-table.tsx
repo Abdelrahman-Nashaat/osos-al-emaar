@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { formatDate } from "@/lib/format/date";
 import { isTaskOverdue, type TaskPriority, type TaskStatus } from "@/lib/tasks/status";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -113,16 +114,14 @@ export function TasksTable({ tasks }: { tasks: TaskListItem[] }) {
 function DueAt({ dueAt, status }: { dueAt: string | null; status: TaskStatus }) {
   if (!dueAt) return <span className="text-sm text-muted-foreground">بدون موعد</span>;
   const overdue = isTaskOverdue(dueAt, status);
-  const day = dueAt.slice(0, 10);
   return (
     <span
       className={cn(
         "text-sm tabular-nums",
         overdue ? "font-medium text-red-600 dark:text-red-400" : "text-muted-foreground",
       )}
-      dir="ltr"
     >
-      <span className="inline-block">{day}</span>
+      <span className="inline-block">{formatDate(dueAt.slice(0, 10))}</span>
       {overdue ? <span className="ms-1">(متأخرة)</span> : null}
     </span>
   );

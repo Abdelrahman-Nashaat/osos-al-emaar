@@ -33,25 +33,51 @@ whichever happens first:
 - **Manual dump (schema + data, full fidelity):**
   `npx supabase db dump --db-url "$SUPABASE_DB_URL" -f backup-$(date +%F).sql`
   (connection string from Dashboard → Settings → Database; never commit it).
-- **Restore:** create a fresh Supabase project → run migrations 0000–0017 from
+- **Restore:** create a fresh Supabase project → run migrations 0000–0023 from
   `supabase/migrations/` in order → re-insert data from the dump/JSON export →
-  update `NEXT_PUBLIC_SUPABASE_URL` / keys in Vercel. Auth users must be
-  re-created (manager bootstrap + team re-creation) — auth identities are NOT
-  part of the app export.
+  re-upload Storage objects → update `NEXT_PUBLIC_SUPABASE_URL` / keys in
+  Vercel. Auth users must be re-created (manager bootstrap + team re-creation)
+  — auth identities are NOT part of the app export.
 
 ## Realtime publication — locked finance exclusion
 
-Only `tasks, task_events, projects, clients, project_members` may be published.
-Regression check (run in EVERY slice gate and after ANY publication change):
+Published tables: `tasks, task_events, projects, clients, project_members,
+portfolio_items, notifications` (notifications are RLS-scoped to their
+recipient; the bell subscribes with the user JWT). Regression check (run in
+EVERY slice gate and after ANY publication change):
 
 ```sql
 select count(*) from pg_publication_tables
 where pubname = 'supabase_realtime'
-  and tablename in ('invoices','payments','invoice_events','project_financials','audit_log');
+  and tablename in ('invoices','payments','invoice_events','project_financials',
+                    'audit_log','offers','offer_events');
 -- MUST return 0
 ```
 
 `audit_log` counts as financial: its `metadata` embeds invoice/payment amounts.
+`offers`/`offer_events` are financial (quotation amounts) — never publish them.
+
+## Storage («المرفقات» + portfolio images)
+
+- One private bucket `attachments`; objects named
+  `<entity_type>/<entity_id>/<uuid>.<ext>`; 10 MB/file cap (bucket +
+  DB CHECK + server action). Downloads are 5-minute signed URLs only — the
+  bucket must NEVER be flipped to public (invoice/offer files live there).
+- Audience classes are enforced by `attachment_visible()` at BOTH the table and
+  storage layers: invoice/offer files = manager+accountant only; task files =
+  tasks.view; client files = clients.view; portfolio uploads = portfolio.edit.
+- **Free-plan quota: 1 GB total storage.** Watch usage in Dashboard → Storage;
+  the Pre-Launch Production Gate (Pro) raises it to 100 GB. Storage objects are
+  NOT part of `/api/export` — a full backup = JSON export + Storage download
+  (Dashboard or `supabase storage cp`) until Pro backups cover the DB.
+
+## ZATCA / VAT posture
+
+- «إعدادات المكتب» holds the VAT number (15 digits) — EMPTY means not
+  VAT-registered: invoices print as «فاتورة» with no QR. When set, prints become
+  «فاتورة ضريبية مبسطة» with the Phase-1 TLV QR (seller, VAT no., timestamp,
+  total, VAT). Phase-2 (FATOORA integration) is NOT implemented — revisit only
+  if ZATCA notifies the office of its integration wave.
 
 ## Per-slice gate runbook
 

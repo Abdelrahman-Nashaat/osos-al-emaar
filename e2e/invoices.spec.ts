@@ -388,7 +388,9 @@ test("manager UI: records a payment and an overdue invoice shows red", async ({ 
   await page.getByRole("button", { name: "ملاحظة تحصيل" }).click();
   await page.locator("#c-note").fill(`متابعة تحصيل ${ts}`);
   await page.getByRole("button", { name: "إضافة", exact: true }).click();
-  await expect(page.getByText(`متابعة تحصيل ${ts}`)).toBeVisible();
+  // Post-mutation router.refresh() re-renders the whole RSC tree; on a busy dev
+  // server (attachments + bell render here too) that can exceed 5s.
+  await expect(page.getByText(`متابعة تحصيل ${ts}`)).toBeVisible({ timeout: 15_000 });
 });
 
 test("invoice form rejects due-before-issue with an inline Arabic message (B8)", async ({

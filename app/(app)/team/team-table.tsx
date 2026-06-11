@@ -23,6 +23,8 @@ type Member = {
   email: string;
   role: Role;
   is_active: boolean;
+  /** Open (not closed) tasks currently assigned — the client's «task load» ask. */
+  open_tasks?: number;
 };
 
 const ROLE_OPTIONS: { value: Role; label: string }[] = [
@@ -123,6 +125,11 @@ export function TeamTable({
                         أنت
                       </Badge>
                     ) : null}
+                    {m.role === "engineer" && (m.open_tasks ?? 0) > 0 ? (
+                      <Badge variant="secondary" className="ms-2 tabular-nums">
+                        {m.open_tasks} مهام مفتوحة
+                      </Badge>
+                    ) : null}
                   </TableCell>
                   <TableCell dir="ltr" className="text-start text-muted-foreground">
                     {m.email}
@@ -158,9 +165,14 @@ export function TeamTable({
             return (
               <div key={m.id} className="space-y-3 rounded-lg border border-border p-4">
                 <div className="space-y-1">
-                  <div className="flex items-center gap-2 font-medium">
+                  <div className="flex flex-wrap items-center gap-2 font-medium">
                     {m.full_name}
                     {self ? <Badge variant="outline">أنت</Badge> : null}
+                    {m.role === "engineer" && (m.open_tasks ?? 0) > 0 ? (
+                      <Badge variant="secondary" className="tabular-nums">
+                        {m.open_tasks} مهام مفتوحة
+                      </Badge>
+                    ) : null}
                   </div>
                   <div dir="ltr" className="text-start text-sm text-muted-foreground">
                     {m.email}

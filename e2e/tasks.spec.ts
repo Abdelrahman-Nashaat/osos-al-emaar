@@ -345,7 +345,9 @@ test("manager UI: reviews a submitted task and closes it", async ({ page }) => {
 
   await page.getByRole("button", { name: "إغلاق المهمة" }).click();
   await page.getByRole("button", { name: "إغلاق", exact: true }).click();
-  await expect(page.getByText("مغلقة").first()).toBeVisible();
+  // Post-mutation router.refresh() re-renders the whole RSC tree; on a cold dev
+  // server (attachments + bell now render here too) that can exceed 5s.
+  await expect(page.getByText("مغلقة").first()).toBeVisible({ timeout: 15_000 });
 });
 
 test("accountant UI: no Tasks nav and /tasks is denied", async ({ page }) => {

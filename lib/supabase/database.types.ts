@@ -14,6 +14,50 @@ export type Database = {
   }
   public: {
     Tables: {
+      attachments: {
+        Row: {
+          created_at: string
+          entity_id: string
+          entity_type: Database["public"]["Enums"]["attachment_entity"]
+          file_name: string
+          id: string
+          mime_type: string | null
+          size_bytes: number
+          storage_path: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          entity_id: string
+          entity_type: Database["public"]["Enums"]["attachment_entity"]
+          file_name: string
+          id?: string
+          mime_type?: string | null
+          size_bytes: number
+          storage_path: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          entity_id?: string
+          entity_type?: Database["public"]["Enums"]["attachment_entity"]
+          file_name?: string
+          id?: string
+          mime_type?: string | null
+          size_bytes?: number
+          storage_path?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attachments_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_log: {
         Row: {
           action: string
@@ -241,6 +285,245 @@ export type Database = {
           },
         ]
       }
+      notifications: {
+        Row: {
+          body: string | null
+          created_at: string
+          href: string | null
+          id: number
+          read_at: string | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          href?: string | null
+          id?: never
+          read_at?: string | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          href?: string | null
+          id?: never
+          read_at?: string | null
+          title?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      offer_events: {
+        Row: {
+          actor_id: string | null
+          amount: number | null
+          created_at: string
+          event_type: Database["public"]["Enums"]["offer_event_type"]
+          from_status: Database["public"]["Enums"]["offer_status"] | null
+          id: number
+          metadata: Json
+          note: string | null
+          offer_id: string
+          to_status: Database["public"]["Enums"]["offer_status"] | null
+        }
+        Insert: {
+          actor_id?: string | null
+          amount?: number | null
+          created_at?: string
+          event_type: Database["public"]["Enums"]["offer_event_type"]
+          from_status?: Database["public"]["Enums"]["offer_status"] | null
+          id?: never
+          metadata?: Json
+          note?: string | null
+          offer_id: string
+          to_status?: Database["public"]["Enums"]["offer_status"] | null
+        }
+        Update: {
+          actor_id?: string | null
+          amount?: number | null
+          created_at?: string
+          event_type?: Database["public"]["Enums"]["offer_event_type"]
+          from_status?: Database["public"]["Enums"]["offer_status"] | null
+          id?: never
+          metadata?: Json
+          note?: string | null
+          offer_id?: string
+          to_status?: Database["public"]["Enums"]["offer_status"] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "offer_events_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "offer_events_offer_id_fkey"
+            columns: ["offer_id"]
+            isOneToOne: false
+            referencedRelation: "offers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      offers: {
+        Row: {
+          client_id: string
+          created_at: string
+          created_by: string | null
+          currency: string
+          id: string
+          issue_date: string
+          notes: string | null
+          offer_number: string
+          project_id: string | null
+          scope: string | null
+          status: Database["public"]["Enums"]["offer_status"]
+          subtotal: number
+          title: string
+          total: number
+          updated_at: string
+          valid_until: string | null
+          vat_amount: number
+          vat_rate: number
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          id?: string
+          issue_date?: string
+          notes?: string | null
+          offer_number: string
+          project_id?: string | null
+          scope?: string | null
+          status?: Database["public"]["Enums"]["offer_status"]
+          subtotal: number
+          title: string
+          total: number
+          updated_at?: string
+          valid_until?: string | null
+          vat_amount?: number
+          vat_rate?: number
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          id?: string
+          issue_date?: string
+          notes?: string | null
+          offer_number?: string
+          project_id?: string | null
+          scope?: string | null
+          status?: Database["public"]["Enums"]["offer_status"]
+          subtotal?: number
+          title?: string
+          total?: number
+          updated_at?: string
+          valid_until?: string | null
+          vat_amount?: number
+          vat_rate?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "offers_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "offers_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "offers_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      office_settings: {
+        Row: {
+          address: string | null
+          city: string | null
+          cr_number: string | null
+          created_at: string
+          email: string | null
+          id: boolean
+          invoice_footer: string | null
+          office_name: string
+          office_name_en: string | null
+          phone: string | null
+          updated_at: string
+          updated_by: string | null
+          vat_number: string | null
+          website: string | null
+        }
+        Insert: {
+          address?: string | null
+          city?: string | null
+          cr_number?: string | null
+          created_at?: string
+          email?: string | null
+          id?: boolean
+          invoice_footer?: string | null
+          office_name: string
+          office_name_en?: string | null
+          phone?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          vat_number?: string | null
+          website?: string | null
+        }
+        Update: {
+          address?: string | null
+          city?: string | null
+          cr_number?: string | null
+          created_at?: string
+          email?: string | null
+          id?: boolean
+          invoice_footer?: string | null
+          office_name?: string
+          office_name_en?: string | null
+          phone?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          vat_number?: string | null
+          website?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "office_settings_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payments: {
         Row: {
           amount: number
@@ -307,6 +590,69 @@ export type Database = {
             columns: ["reversed_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      portfolio_items: {
+        Row: {
+          category: string | null
+          city: string | null
+          cover_path: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          is_published: boolean
+          project_id: string | null
+          sort_order: number
+          title: string
+          updated_at: string
+          year: number | null
+        }
+        Insert: {
+          category?: string | null
+          city?: string | null
+          cover_path?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_published?: boolean
+          project_id?: string | null
+          sort_order?: number
+          title: string
+          updated_at?: string
+          year?: number | null
+        }
+        Update: {
+          category?: string | null
+          city?: string | null
+          cover_path?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_published?: boolean
+          project_id?: string | null
+          sort_order?: number
+          title?: string
+          updated_at?: string
+          year?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portfolio_items_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "portfolio_items_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
@@ -685,6 +1031,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      attachment_visible: {
+        Args: { p_type: Database["public"]["Enums"]["attachment_entity"] }
+        Returns: boolean
+      }
       can_view_financials: { Args: never; Returns: boolean }
       current_app_role: {
         Args: never
@@ -742,10 +1092,61 @@ export type Database = {
       }
       is_accountant: { Args: never; Returns: boolean }
       is_manager: { Args: never; Returns: boolean }
+      notifications_mark_all_read: { Args: never; Returns: undefined }
+      notifications_mark_read: { Args: { p_ids: number[] }; Returns: undefined }
+      offer_add_note: {
+        Args: { p_note: string; p_offer: string }
+        Returns: undefined
+      }
+      offer_convert_to_project: {
+        Args: {
+          p_due_date?: string
+          p_name?: string
+          p_offer: string
+          p_start_date?: string
+        }
+        Returns: string
+      }
+      offer_create: {
+        Args: {
+          p_client: string
+          p_note?: string
+          p_scope?: string
+          p_subtotal: number
+          p_title: string
+          p_valid_until?: string
+          p_vat_rate?: number
+        }
+        Returns: string
+      }
+      offer_delete: {
+        Args: { p_note?: string; p_offer: string }
+        Returns: undefined
+      }
+      offer_transition: {
+        Args: {
+          p_note?: string
+          p_offer: string
+          p_to: Database["public"]["Enums"]["offer_status"]
+        }
+        Returns: undefined
+      }
+      offer_update: {
+        Args: {
+          p_offer: string
+          p_scope?: string
+          p_subtotal: number
+          p_title: string
+          p_valid_until?: string
+          p_vat_rate?: number
+        }
+        Returns: undefined
+      }
       payment_reverse: {
         Args: { p_note?: string; p_payment: string }
         Returns: undefined
       }
+      storage_attachment_visible: { Args: { p_name: string }; Returns: boolean }
       task_add_note: {
         Args: { p_note: string; p_task: string }
         Returns: undefined
@@ -803,6 +1204,13 @@ export type Database = {
     }
     Enums: {
       app_role: "manager" | "engineer" | "accountant"
+      attachment_entity:
+        | "project"
+        | "task"
+        | "client"
+        | "offer"
+        | "invoice"
+        | "portfolio"
       invoice_event_type:
         | "created"
         | "sent"
@@ -811,6 +1219,16 @@ export type Database = {
         | "voided"
         | "note"
       invoice_status: "draft" | "sent" | "partially_paid" | "paid" | "void"
+      offer_event_type:
+        | "created"
+        | "updated"
+        | "sent"
+        | "accepted"
+        | "rejected"
+        | "expired"
+        | "note"
+        | "converted"
+      offer_status: "draft" | "sent" | "accepted" | "rejected" | "expired"
       payment_method: "cash" | "bank_transfer" | "cheque" | "card" | "other"
       project_status:
         | "planning"
@@ -959,6 +1377,14 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["manager", "engineer", "accountant"],
+      attachment_entity: [
+        "project",
+        "task",
+        "client",
+        "offer",
+        "invoice",
+        "portfolio",
+      ],
       invoice_event_type: [
         "created",
         "sent",
@@ -968,6 +1394,17 @@ export const Constants = {
         "note",
       ],
       invoice_status: ["draft", "sent", "partially_paid", "paid", "void"],
+      offer_event_type: [
+        "created",
+        "updated",
+        "sent",
+        "accepted",
+        "rejected",
+        "expired",
+        "note",
+        "converted",
+      ],
+      offer_status: ["draft", "sent", "accepted", "rejected", "expired"],
       payment_method: ["cash", "bank_transfer", "cheque", "card", "other"],
       project_status: [
         "planning",

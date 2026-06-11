@@ -2,6 +2,7 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { isInvoiceOverdue, outstanding, type InvoiceStatus } from "@/lib/finance/invoice";
 import { formatMoney } from "@/lib/projects/money";
+import { formatDate } from "@/lib/format/date";
 import {
   Table,
   TableBody,
@@ -123,9 +124,8 @@ function DueDate({ due, status }: { due: string | null; status: InvoiceStatus })
         "text-sm tabular-nums",
         overdue ? "font-medium text-red-600 dark:text-red-400" : "text-muted-foreground",
       )}
-      dir="ltr"
     >
-      <span className="inline-block">{due.slice(0, 10)}</span>
+      <span className="inline-block">{formatDate(due.slice(0, 10))}</span>
       {overdue ? <span className="ms-1">(متأخرة)</span> : null}
     </span>
   );

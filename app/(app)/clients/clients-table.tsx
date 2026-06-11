@@ -1,6 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { Pencil, Trash2 } from "lucide-react";
 import { deleteClient } from "./actions";
@@ -58,7 +59,11 @@ export function ClientsTable({
           <TableBody>
             {clients.map((c) => (
               <TableRow key={c.id}>
-                <TableCell className="font-medium">{c.name}</TableCell>
+                <TableCell className="font-medium">
+                  <Link href={`/clients/${c.id}`} className="hover:underline">
+                    {c.name}
+                  </Link>
+                </TableCell>
                 <TableCell className="text-muted-foreground">{c.company ?? "—"}</TableCell>
                 <TableCell dir="ltr" className="text-end text-muted-foreground">
                   {c.phone ?? "—"}
@@ -80,7 +85,9 @@ export function ClientsTable({
         {clients.map((c) => (
           <div key={c.id} className="space-y-2 rounded-lg border border-border p-4">
             <div className="flex items-start justify-between gap-2">
-              <div className="font-medium">{c.name}</div>
+              <Link href={`/clients/${c.id}`} className="font-medium hover:underline">
+                {c.name}
+              </Link>
               {canEdit ? <RowActions client={c} /> : null}
             </div>
             {c.company ? <div className="text-sm text-muted-foreground">{c.company}</div> : null}

@@ -16,3 +16,6 @@ test-results
 *.tsbuildinfo
 .vercel
 .backups/
+# Disposable phase tooling (seed/clean/probe helpers) — never ship.
+scripts/tmp-*.ts
+.tmp-*.log

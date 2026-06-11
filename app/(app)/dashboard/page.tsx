@@ -5,6 +5,7 @@ import { can } from "@/lib/auth/permission-keys";
 import { isTaskOverdue, TASK_EVENT_LABELS } from "@/lib/tasks/status";
 import { isInvoiceOverdue, isIssued, outstanding } from "@/lib/finance/invoice";
 import { formatMoney } from "@/lib/projects/money";
+import { formatDate } from "@/lib/format/date";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -46,9 +47,10 @@ export default async function DashboardPage() {
 
 async function FinanceWidgets() {
   const supabase = await createClient();
-  const [invRes, payRes] = await Promise.all([
+  const [invRes, payRes, offersRes] = await Promise.all([
     supabase.from("invoices").select("id, status, issue_date, due_date, total, amount_paid"),
     supabase.from("payments").select("invoice_id, amount, paid_at, is_reversed"),
+    supabase.from("offers").select("id", { count: "exact", head: true }).eq("status", "sent"),
   ]);
   // Secondary widget: surface a fetch failure inline — never render zeros (B4).
   if (invRes.error || payRes.error) {
@@ -60,6 +62,7 @@ async function FinanceWidgets() {
   }
   const invoices = invRes.data;
   const payments = payRes.data;
+  const pendingOffers = offersRes.count ?? 0;
 
   // Money KPIs count ISSUED invoices only (sent/partially_paid/paid) — drafts are
   // not receivables and void is cancelled. Collected = non-reversed payments on
@@ -89,6 +92,10 @@ async function FinanceWidgets() {
       danger: overdueAmount > 0,
     },
     { label: "فواتير هذا الشهر", value: formatMoney(invoicedMonth), href: "/invoices" },
+    // Quotation pipeline — only when something actually awaits a client reply.
+    ...(pendingOffers > 0
+      ? [{ label: "عروض بانتظار الرد", value: String(pendingOffers), href: "/offers?filter=sent" }]
+      : []),
   ];
 
   return (
@@ -172,8 +179,64 @@ async function TaskWidgets({ userId, isManager }: { userId: string; isManager: b
         ))}
       </div>
 
-      {isManager ? <RecentActivity titles={new Map(list.map((t) => [t.id, t.title]))} /> : null}
+      {isManager ? (
+        <RecentActivity titles={new Map(list.map((t) => [t.id, t.title]))} />
+      ) : (
+        <MyNextTasks
+          tasks={list
+            .filter((t) => t.current_assignee_id === userId && t.status !== "closed")
+            .sort((a, b) => (a.due_at ?? "9999") < (b.due_at ?? "9999") ? -1 : 1)
+            .slice(0, 5)}
+        />
+      )}
     </div>
+  );
+}
+
+/** The engineer lands on his actual work list, not just counters. */
+function MyNextTasks({
+  tasks,
+}: {
+  tasks: { id: string; title: string; due_at: string | null; status: string }[];
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">مهامي القادمة</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {tasks.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            لا توجد مهام مسندة إليك حالياً — راجع قائمة المهام العامة.
+          </p>
+        ) : (
+          <ul className="space-y-1">
+            {tasks.map((t) => {
+              const overdue = isTaskOverdue(t.due_at, t.status as Parameters<typeof isTaskOverdue>[1]);
+              return (
+                <li key={t.id}>
+                  <Link
+                    href={`/tasks/${t.id}`}
+                    className="flex min-h-10 flex-wrap items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted"
+                  >
+                    <span className="min-w-0 truncate font-medium">{t.title}</span>
+                    <span
+                      className={cn(
+                        "shrink-0 text-xs tabular-nums",
+                        overdue ? "font-medium text-red-600 dark:text-red-400" : "text-muted-foreground",
+                      )}
+                    >
+                      {t.due_at ? formatDate(t.due_at.slice(0, 10)) : "بدون موعد"}
+                      {overdue ? " (متأخرة)" : ""}
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

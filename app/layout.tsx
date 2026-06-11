@@ -11,6 +11,14 @@ const cairo = Cairo({
   display: "swap",
 });
 
+// The proxy issues a per-request CSP nonce. Statically prerendered HTML (e.g.
+// /login, the 404 page) is built without any request, so its <script> tags carry
+// no nonce and the browser blocks ALL JS on those pages in production (found
+// live: 20 blocked chunks on /login; SW registration dead on the entry page).
+// Forcing dynamic rendering at the root keeps every page's nonce in sync with
+// the response header. The (app) group was already dynamic via cookies.
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: { default: brand.nameAr, template: `%s · ${brand.shortNameAr}` },
   description: brand.taglineAr,

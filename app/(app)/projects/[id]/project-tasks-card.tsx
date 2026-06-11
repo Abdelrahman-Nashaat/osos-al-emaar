@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { isTaskOverdue, type TaskPriority, type TaskStatus } from "@/lib/tasks/status";
+import { formatDate } from "@/lib/format/date";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -73,9 +74,8 @@ export function ProjectTasksCard({
                             "tabular-nums",
                             overdue ? "font-medium text-red-600 dark:text-red-400" : "",
                           )}
-                          dir="ltr"
                         >
-                          {t.due_at.slice(0, 10)}
+                          {formatDate(t.due_at.slice(0, 10))}
                         </span>
                       ) : null}
                     </span>

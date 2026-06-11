@@ -1,18 +1,25 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import QRCode from "qrcode";
 import { getEffectivePermissions, getSessionProfile } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { can } from "@/lib/auth/permission-keys";
 import { isInvoiceOverdue, nextInvoiceActions, outstanding } from "@/lib/finance/invoice";
 import { formatMoney } from "@/lib/projects/money";
+import { formatDate } from "@/lib/format/date";
+import { getOfficeSettings } from "@/lib/office/settings";
+import { buildZatcaTlvBase64 } from "@/lib/zatca/qr";
+import { fetchAttachments } from "@/lib/attachments/list";
 import { cn } from "@/lib/utils";
 import { PermissionDenied } from "@/components/permission-denied";
+import { AttachmentsCard } from "@/components/attachments-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { InvoiceStatusBadge } from "../invoice-status-badge";
 import { InvoiceActions } from "../invoice-actions";
 import { PaymentsList, type PaymentRow } from "../payments-list";
 import { InvoiceTimeline, type InvoiceTimelineItem } from "../invoice-timeline";
 import { PrintButton } from "../print-button";
+import { InvoicePrintDocument } from "./invoice-print-document";
 
 export default async function InvoiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -29,7 +36,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
   const { data: invoice, error: invoiceError } = await supabase
     .from("invoices")
     .select(
-      "id, invoice_number, project_id, client_id, status, issue_date, due_date, subtotal, vat_rate, vat_amount, total, amount_paid, currency, description",
+      "id, invoice_number, project_id, client_id, status, issue_date, due_date, subtotal, vat_rate, vat_amount, total, amount_paid, currency, description, created_at",
     )
     .eq("id", id)
     .single();
@@ -45,8 +52,10 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
     { data: payments },
     { data: events },
     { data: directory },
+    office,
+    attachments,
   ] = await Promise.all([
-    supabase.from("clients").select("id, name").eq("id", invoice.client_id).maybeSingle(),
+    supabase.from("clients").select("id, name, address").eq("id", invoice.client_id).maybeSingle(),
     supabase.from("projects").select("id, name").eq("id", invoice.project_id).maybeSingle(),
     supabase
       .from("payments")
@@ -59,12 +68,27 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
       .eq("invoice_id", id)
       .order("created_at", { ascending: false }),
     supabase.rpc("team_directory"),
+    getOfficeSettings(),
+    fetchAttachments("invoice", id),
   ]);
   const nameById = new Map((directory ?? []).map((p) => [p.id, p.full_name] as const));
 
   const actions = nextInvoiceActions(invoice.status, { isManager });
   const overdue = isInvoiceOverdue(invoice.due_date, invoice.status);
   const due = outstanding(invoice.total, invoice.amount_paid);
+
+  // ZATCA Phase-1 QR — only when the office is VAT-registered (إعدادات المكتب).
+  let qrDataUrl: string | null = null;
+  if (office.vat_number) {
+    const payload = buildZatcaTlvBase64({
+      sellerName: office.office_name,
+      vatNumber: office.vat_number,
+      timestamp: invoice.created_at,
+      total: invoice.total,
+      vatAmount: invoice.vat_amount,
+    });
+    qrDataUrl = await QRCode.toDataURL(payload, { margin: 1, width: 256 });
+  }
 
   const paymentRows: PaymentRow[] = (payments ?? []).map((p) => ({
     id: p.id,
@@ -88,6 +112,8 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
 
   return (
     <div className="space-y-6">
+      {/* The screen UI hides in print; the letterhead document below replaces it. */}
+      <div className="space-y-6 print:hidden">
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-2">
@@ -166,20 +192,17 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
           />
           <div className="space-y-1">
             <div className="text-xs text-muted-foreground">تاريخ الإصدار</div>
-            <div className="text-sm tabular-nums text-end" dir="ltr">
-              {invoice.issue_date}
-            </div>
+            <div className="text-sm tabular-nums">{formatDate(invoice.issue_date)}</div>
           </div>
           <div className="space-y-1">
             <div className="text-xs text-muted-foreground">تاريخ الاستحقاق</div>
             <div
               className={cn(
-                "text-sm tabular-nums text-end",
+                "text-sm tabular-nums",
                 overdue ? "font-medium text-red-600 dark:text-red-400" : "",
               )}
-              dir="ltr"
             >
-              {invoice.due_date ?? "—"}
+              {formatDate(invoice.due_date)}
               {overdue ? <span className="ms-1">(متأخرة)</span> : null}
             </div>
           </div>
@@ -208,6 +231,15 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
         </CardContent>
       </Card>
 
+      <AttachmentsCard
+        entityType="invoice"
+        entityId={invoice.id}
+        items={attachments}
+        canUpload={true}
+        currentUserId={session.userId}
+        isManager={isManager}
+      />
+
       {/* History timeline */}
       <Card className="no-print">
         <CardHeader>
@@ -217,6 +249,23 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
           <InvoiceTimeline items={timeline} currency={invoice.currency} />
         </CardContent>
       </Card>
+      </div>
+
+      <InvoicePrintDocument
+        office={office}
+        invoice={invoice}
+        clientName={client?.name ?? "—"}
+        clientAddress={client?.address ?? null}
+        projectName={project?.name ?? "—"}
+        payments={paymentRows.map((p) => ({
+          id: p.id,
+          amount: p.amount,
+          paid_at: p.paid_at,
+          method: p.method,
+          is_reversed: p.is_reversed,
+        }))}
+        qrDataUrl={qrDataUrl}
+      />
     </div>
   );
 }

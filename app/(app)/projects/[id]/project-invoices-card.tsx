@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 import { isInvoiceOverdue, outstanding, type InvoiceStatus } from "@/lib/finance/invoice";
 import { formatMoney } from "@/lib/projects/money";
+import { formatDate } from "@/lib/format/date";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -77,9 +78,8 @@ export function ProjectInvoicesCard({
                             "tabular-nums",
                             overdue ? "font-medium text-red-600 dark:text-red-400" : "",
                           )}
-                          dir="ltr"
                         >
-                          {inv.due_date.slice(0, 10)}
+                          {formatDate(inv.due_date.slice(0, 10))}
                         </span>
                       ) : null}
                     </span>

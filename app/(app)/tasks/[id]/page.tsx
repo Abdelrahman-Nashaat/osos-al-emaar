@@ -1,11 +1,15 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { CalendarPlus } from "lucide-react";
 import { getEffectivePermissions, getSessionProfile } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { can } from "@/lib/auth/permission-keys";
 import { isTaskOverdue, nextActions } from "@/lib/tasks/status";
+import { formatDate } from "@/lib/format/date";
+import { fetchAttachments } from "@/lib/attachments/list";
 import { cn } from "@/lib/utils";
 import { PermissionDenied } from "@/components/permission-denied";
+import { AttachmentsCard } from "@/components/attachments-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ProgressBar } from "../../projects/progress-bar";
 import { TaskStatusBadge } from "../task-status-badge";
@@ -90,7 +94,7 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
   });
 
   const overdue = isTaskOverdue(task.due_at, task.status);
-  const dueDay = task.due_at ? task.due_at.slice(0, 10) : null;
+  const attachments = await fetchAttachments("task", task.id);
 
   return (
     <div className="space-y-6">
@@ -150,13 +154,22 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
             <div className="text-xs text-muted-foreground">تاريخ الاستحقاق</div>
             <div
               className={cn(
-                "text-sm tabular-nums text-end",
+                "text-sm tabular-nums",
                 overdue ? "font-medium text-red-600 dark:text-red-400" : "",
               )}
-              dir="ltr"
             >
-              {dueDay ?? "—"}
+              {formatDate(task.due_at ? task.due_at.slice(0, 10) : null)}
               {overdue ? <span className="ms-1">(متأخرة)</span> : null}
+              {task.due_at ? (
+                <a
+                  href={`/api/task-ics?id=${task.id}`}
+                  className="ms-3 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground hover:underline"
+                  download
+                >
+                  <CalendarPlus className="size-3.5" aria-hidden />
+                  إضافة للتقويم
+                </a>
+              ) : null}
             </div>
           </div>
           {task.description ? (
@@ -167,6 +180,16 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
           ) : null}
         </CardContent>
       </Card>
+
+      {/* Attachments — the engineer's deliverables live here, not on WhatsApp. */}
+      <AttachmentsCard
+        entityType="task"
+        entityId={task.id}
+        items={attachments}
+        canUpload={true}
+        currentUserId={session.userId}
+        isManager={isManager}
+      />
 
       {/* History timeline */}
       <Card>

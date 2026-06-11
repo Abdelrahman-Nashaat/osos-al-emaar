@@ -5,8 +5,11 @@ import { getEffectivePermissions, getSessionProfile } from "@/lib/auth/permissio
 import { createClient } from "@/lib/supabase/server";
 import { can } from "@/lib/auth/permission-keys";
 import { isOverdue } from "@/lib/projects/status";
+import { formatDate } from "@/lib/format/date";
+import { fetchAttachments } from "@/lib/attachments/list";
 import { cn } from "@/lib/utils";
 import { PermissionDenied } from "@/components/permission-denied";
+import { AttachmentsCard } from "@/components/attachments-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "../status-badge";
@@ -176,6 +179,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     : [];
 
   const overdue = isOverdue(project.due_date, project.status);
+  const attachments = await fetchAttachments("project", project.id);
 
   return (
     <div className="space-y-6">
@@ -232,17 +236,16 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             <div className="text-xs text-muted-foreground">نسبة الإنجاز</div>
             <ProgressBar value={project.progress} />
           </div>
-          <Field label="تاريخ البدء" value={project.start_date ?? "—"} ltr />
+          <Field label="تاريخ البدء" value={formatDate(project.start_date)} />
           <div className="space-y-1">
             <div className="text-xs text-muted-foreground">تاريخ الاستحقاق</div>
             <div
               className={cn(
-                "text-sm tabular-nums text-end",
+                "text-sm tabular-nums",
                 overdue ? "font-medium text-red-600 dark:text-red-400" : "",
               )}
-              dir="ltr"
             >
-              {project.due_date ?? "—"}
+              {formatDate(project.due_date)}
               {overdue ? <span className="ms-1">(متأخر)</span> : null}
             </div>
           </div>
@@ -302,6 +305,17 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           engineers={taskEngineers}
         />
       ) : null}
+
+      {/* Attachments — drawings, permits, site photos. Anyone who can open the
+          project can contribute files (engineers upload deliverables here). */}
+      <AttachmentsCard
+        entityType="project"
+        entityId={project.id}
+        items={attachments}
+        canUpload={true}
+        currentUserId={session.userId}
+        isManager={isManager}
+      />
 
       {/* Financials — rendered ONLY for manager + accountant */}
       {showFinancials ? (

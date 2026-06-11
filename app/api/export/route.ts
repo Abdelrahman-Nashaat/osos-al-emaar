@@ -19,6 +19,11 @@ const ENTITIES = {
   invoices: "id, invoice_number, project_id, client_id, status, issue_date, due_date, subtotal, vat_rate, vat_amount, total, amount_paid, currency, description, created_at",
   payments: "id, invoice_id, amount, paid_at, method, reference, notes, is_reversed, reversed_at, reversal_note, created_at",
   invoice_events: "id, invoice_id, actor_id, event_type, amount, from_status, to_status, note, created_at",
+  offers: "id, offer_number, client_id, title, scope, status, issue_date, valid_until, subtotal, vat_rate, vat_amount, total, currency, notes, project_id, created_at",
+  offer_events: "id, offer_id, actor_id, event_type, amount, from_status, to_status, note, created_at",
+  attachments: "id, entity_type, entity_id, storage_path, file_name, mime_type, size_bytes, uploaded_by, created_at",
+  portfolio_items: "id, title, description, category, city, year, project_id, cover_path, is_published, created_at",
+  office_settings: "id, office_name, office_name_en, cr_number, vat_number, address, city, phone, email, website, invoice_footer, created_at",
   profiles: "id, full_name, email, role, is_active, created_at",
   audit_log: "id, actor_id, action, target_type, target_id, metadata, created_at",
 } as const;

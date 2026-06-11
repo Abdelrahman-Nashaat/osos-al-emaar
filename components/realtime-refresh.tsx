@@ -4,10 +4,18 @@ import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
-// Operational tables only (published in 0015). Finance tables are NEVER in the
-// publication (locked rule) — finance surfaces stay fresh via the focus refetch
-// below plus the post-mutation router.refresh() (B5).
-const OPERATIONAL_TABLES = ["tasks", "task_events", "projects", "clients", "project_members"];
+// Operational tables only (published in 0015 + portfolio_items in 0022).
+// Finance tables are NEVER in the publication (locked rule) — finance surfaces
+// stay fresh via the focus refetch below plus the post-mutation router.refresh()
+// (B5). notifications stream to their own channel in NotificationsBell.
+const OPERATIONAL_TABLES = [
+  "tasks",
+  "task_events",
+  "projects",
+  "clients",
+  "project_members",
+  "portfolio_items",
+];
 
 /**
  * Live multi-device refresh (Phase 4.5 C2): one throttled channel over the

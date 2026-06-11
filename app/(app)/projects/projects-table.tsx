@@ -2,6 +2,7 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { isOverdue, type ProjectStatus } from "@/lib/projects/status";
 import { formatMoney } from "@/lib/projects/money";
+import { formatDate } from "@/lib/format/date";
 import { ProjectCode } from "@/lib/projects/label";
 import { StatusBadge } from "./status-badge";
 import { ProgressBar } from "./progress-bar";
@@ -131,7 +132,7 @@ function DueDate({ dueDate, status }: { dueDate: string | null; status: ProjectS
         overdue ? "font-medium text-red-600 dark:text-red-400" : "text-muted-foreground",
       )}
     >
-      {dueDate}
+      {formatDate(dueDate)}
       {overdue ? <span className="ms-1">(متأخر)</span> : null}
     </span>
   );
