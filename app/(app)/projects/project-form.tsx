@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { toast } from "sonner";
+import { useActionResult } from "@/components/use-action-result";
 import { saveProject } from "./actions";
 import {
   PROJECT_STATUSES,
@@ -48,22 +48,37 @@ export function ProjectFormDialog({
 }) {
   const isEdit = Boolean(project);
   const [open, setOpen] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const onResult = useActionResult();
 
   function handleSubmit(formData: FormData) {
+    // Instant cross-field check (the server re-validates — B8).
+    const start = String(formData.get("start_date") ?? "");
+    const due = String(formData.get("due_date") ?? "");
+    if (start && due && due < start) {
+      setFormError("تاريخ البدء يجب أن يسبق تاريخ الاستحقاق أو يساويه.");
+      return;
+    }
     startTransition(async () => {
       const res = await saveProject(formData);
-      if (res.error) {
-        toast.error(res.error);
-      } else {
-        toast.success(res.success ?? "تم");
+      if (onResult(res)) {
+        setFormError(null);
         setOpen(false);
+      } else {
+        setFormError(res.error ?? null);
       }
     });
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (!o) setFormError(null);
+      }}
+    >
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="max-h-[90svh] overflow-y-auto">
         <DialogHeader>
@@ -72,7 +87,7 @@ export function ProjectFormDialog({
             المعلومات التشغيلية للمشروع. تُدار المبالغ من صفحة المشروع (للمدير والمحاسب فقط).
           </DialogDescription>
         </DialogHeader>
-        <form action={handleSubmit} className="grid gap-3 sm:grid-cols-2">
+        <form action={handleSubmit} noValidate className="grid gap-3 sm:grid-cols-2">
           {isEdit ? <input type="hidden" name="id" defaultValue={project!.id} /> : null}
 
           <div className="space-y-2 sm:col-span-2">
@@ -158,6 +173,11 @@ export function ProjectFormDialog({
             <Textarea id="p-desc" name="description" rows={3} defaultValue={project?.description ?? ""} />
           </div>
 
+          {formError ? (
+            <p role="alert" className="text-sm text-destructive sm:col-span-2">
+              {formError}
+            </p>
+          ) : null}
           <DialogFooter className="sm:col-span-2">
             <Button type="submit" disabled={pending}>
               {pending ? "جارٍ الحفظ…" : isEdit ? "حفظ التغييرات" : "إنشاء المشروع"}

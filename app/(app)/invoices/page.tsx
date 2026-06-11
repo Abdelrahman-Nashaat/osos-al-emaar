@@ -11,6 +11,7 @@ import {
   type AgingBucket,
 } from "@/lib/finance/invoice";
 import { formatMoney } from "@/lib/projects/money";
+import { must } from "@/lib/supabase/fetch";
 import { PermissionDenied } from "@/components/permission-denied";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -38,18 +39,22 @@ export default async function InvoicesPage({
   const filter = parseInvoiceFilter(filterParam);
 
   const supabase = await createClient();
-  const [{ data: rows }, { data: clientRows }, { data: projectRows }] = await Promise.all([
-    supabase
-      .from("invoices")
-      .select("id, invoice_number, client_id, project_id, total, amount_paid, status, due_date, currency")
-      .order("created_at", { ascending: false }),
-    supabase.from("clients").select("id, name").order("name"),
-    supabase.from("projects").select("id, name").order("name"),
+  // Load-bearing finance reads → throw to error.tsx instead of fake-empty (B4).
+  const [rows, clientRows, projectRows] = await Promise.all([
+    must(
+      "invoices.list",
+      supabase
+        .from("invoices")
+        .select("id, invoice_number, client_id, project_id, total, amount_paid, status, due_date, currency")
+        .order("created_at", { ascending: false }),
+    ),
+    must("invoices.clients", supabase.from("clients").select("id, name").order("name")),
+    must("invoices.projects", supabase.from("projects").select("id, name").order("name")),
   ]);
-  const clientName = new Map((clientRows ?? []).map((c) => [c.id, c.name] as const));
-  const projectName = new Map((projectRows ?? []).map((p) => [p.id, p.name] as const));
+  const clientName = new Map(clientRows.map((c) => [c.id, c.name] as const));
+  const projectName = new Map(projectRows.map((p) => [p.id, p.name] as const));
 
-  const all = (rows ?? []).map((inv) => ({
+  const all = rows.map((inv) => ({
     id: inv.id,
     invoice_number: inv.invoice_number,
     client_name: clientName.get(inv.client_id) ?? null,
@@ -96,9 +101,9 @@ export default async function InvoicesPage({
           </p>
         </div>
         <InvoiceFormDialog
-          projects={projectRows ?? []}
+          projects={projectRows}
           trigger={
-            <Button className="shrink-0">
+            <Button className="shrink-0" aria-label="فاتورة جديدة">
               <Plus className="size-4" />
               <span className="hidden sm:inline">فاتورة جديدة</span>
             </Button>

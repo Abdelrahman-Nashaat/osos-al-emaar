@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { toast } from "sonner";
+import { useActionResult } from "@/components/use-action-result";
 import { createTask } from "./actions";
 import { TASK_PRIORITIES, TASK_PRIORITY_LABELS } from "@/lib/tasks/status";
 import { Button } from "@/components/ui/button";
@@ -38,16 +38,11 @@ export function TaskFormDialog({
 }) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
+  const onResult = useActionResult();
 
   function handleSubmit(formData: FormData) {
     startTransition(async () => {
-      const res = await createTask(formData);
-      if (res.error) {
-        toast.error(res.error);
-      } else {
-        toast.success(res.success ?? "تم");
-        setOpen(false);
-      }
+      if (onResult(await createTask(formData))) setOpen(false);
     });
   }
 

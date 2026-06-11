@@ -35,6 +35,10 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // The floating dev indicator portal sits bottom-start (bottom-LEFT in RTL),
+  // exactly over the mobile nav's «المزيد» cell, and intercepts pointer events
+  // in e2e runs. Dev-only cosmetic — disabled. Production is unaffected.
+  devIndicators: false,
   async headers() {
     return [{ source: "/(.*)", headers: securityHeaders }];
   },

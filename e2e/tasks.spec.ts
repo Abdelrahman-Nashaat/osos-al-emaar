@@ -355,3 +355,14 @@ test("accountant UI: no Tasks nav and /tasks is denied", async ({ page }) => {
   await page.goto("/tasks");
   await expect(page.getByText("لا تملك صلاحية الوصول")).toBeVisible();
 });
+
+test("reassigning to the current holder is a precise no-op error (B6/0014)", async () => {
+  const mc = await authedClient(mgr.email, mgr.password);
+  const taskId = await rpcCreateTask(mc, { title: `نفس المهندس ${ts}`, assignee: engAId });
+
+  const res = await mc.rpc("task_assign", { p_task: taskId, p_assignee: engAId });
+  expect(res.error?.message ?? "").toContain("same_assignee");
+
+  // A real handoff still works afterwards.
+  expect((await mc.rpc("task_assign", { p_task: taskId, p_assignee: engBId })).error).toBeNull();
+});

@@ -4,6 +4,7 @@ import { getEffectivePermissions, getSessionProfile } from "@/lib/auth/permissio
 import { createClient } from "@/lib/supabase/server";
 import { can } from "@/lib/auth/permission-keys";
 import { isInvoiceOverdue, isIssued, outstanding } from "@/lib/finance/invoice";
+import { must } from "@/lib/supabase/fetch";
 import { formatMoney } from "@/lib/projects/money";
 import { cn } from "@/lib/utils";
 import { PermissionDenied } from "@/components/permission-denied";
@@ -74,31 +75,30 @@ export default async function ReportsPage({
   const inPeriod = (d: string | null) => !from || (d != null && d >= from);
 
   const supabase = await createClient();
-  const [
-    { data: invoices },
-    { data: payments },
-    { data: clients },
-    { data: projects },
-    { data: financials },
-  ] = await Promise.all([
-    supabase
-      .from("invoices")
-      .select("id, client_id, project_id, status, issue_date, due_date, total, amount_paid"),
-    supabase.from("payments").select("invoice_id, amount, paid_at, is_reversed"),
-    supabase.from("clients").select("id, name"),
-    supabase.from("projects").select("id, name"),
-    supabase.from("project_financials").select("project_id, contract_value"),
+  // Load-bearing finance reads: a failed query throws to error.tsx (B4) — the
+  // reports page must never render zeros the office might act on.
+  const [invoices, payments, clients, projects, financials] = await Promise.all([
+    must(
+      "reports.invoices",
+      supabase
+        .from("invoices")
+        .select("id, client_id, project_id, status, issue_date, due_date, total, amount_paid"),
+    ),
+    must("reports.payments", supabase.from("payments").select("invoice_id, amount, paid_at, is_reversed")),
+    must("reports.clients", supabase.from("clients").select("id, name")),
+    must("reports.projects", supabase.from("projects").select("id, name")),
+    must("reports.financials", supabase.from("project_financials").select("project_id, contract_value")),
   ]);
 
-  const invList = invoices ?? [];
+  const invList = invoices;
   // Money aggregates count ISSUED invoices only (sent/partially_paid/paid) —
   // drafts and void never inflate revenue/outstanding (Phase 4.5 A1).
   const issuedInvoices = invList.filter((i) => isIssued(i.status));
   const invoiceById = new Map(invList.map((i) => [i.id, i] as const));
-  const clientName = new Map((clients ?? []).map((c) => [c.id, c.name] as const));
-  const projectName = new Map((projects ?? []).map((p) => [p.id, p.name] as const));
+  const clientName = new Map(clients.map((c) => [c.id, c.name] as const));
+  const projectName = new Map(projects.map((p) => [p.id, p.name] as const));
   const contractByProject = new Map(
-    (financials ?? []).map((f) => [f.project_id, f.contract_value] as const),
+    financials.map((f) => [f.project_id, f.contract_value] as const),
   );
 
   // Revenue summary — invoiced & collected are period-bound; outstanding & overdue
@@ -107,7 +107,7 @@ export default async function ReportsPage({
   const invoicedPeriod = issuedInvoices
     .filter((i) => inPeriod(i.issue_date))
     .reduce((s, i) => s + i.total, 0);
-  const collectedPeriod = (payments ?? [])
+  const collectedPeriod = payments
     .filter((p) => {
       if (p.is_reversed || !inPeriod(p.paid_at)) return false;
       const inv = invoiceById.get(p.invoice_id);
@@ -128,7 +128,7 @@ export default async function ReportsPage({
     bump(byProject, i.project_id, "invoiced", i.total);
     bump(byProject, i.project_id, "outstanding", outstanding(i.total, i.amount_paid));
   }
-  for (const p of payments ?? []) {
+  for (const p of payments) {
     if (p.is_reversed) continue;
     const inv = invoiceById.get(p.invoice_id);
     if (!inv || !isIssued(inv.status)) continue;
@@ -205,30 +205,46 @@ export default async function ReportsPage({
           {clientRows.length === 0 ? (
             <p className="text-sm text-muted-foreground">لا توجد بيانات بعد.</p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>العميل</TableHead>
-                  <TableHead>الفواتير</TableHead>
-                  <TableHead>المُحصّل</TableHead>
-                  <TableHead>المتبقّي</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            <>
+              {/* Desktop (and print): table — print:block guards narrow print viewports */}
+              <div className="hidden print:block md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>العميل</TableHead>
+                      <TableHead>الفواتير</TableHead>
+                      <TableHead>المُحصّل</TableHead>
+                      <TableHead>المتبقّي</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {clientRows.map((c) => (
+                      <TableRow key={c.name}>
+                        <TableCell className="font-medium">{c.name}</TableCell>
+                        <TableCell className="tabular-nums">{formatMoney(c.invoiced)}</TableCell>
+                        <TableCell className="tabular-nums text-muted-foreground">
+                          {formatMoney(c.collected)}
+                        </TableCell>
+                        <TableCell className="tabular-nums font-medium">
+                          {formatMoney(c.outstanding)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              {/* Mobile: stacked money cards — the 360px overflow fix (B2) */}
+              <div className="space-y-3 print:hidden md:hidden">
                 {clientRows.map((c) => (
-                  <TableRow key={c.name}>
-                    <TableCell className="font-medium">{c.name}</TableCell>
-                    <TableCell className="tabular-nums">{formatMoney(c.invoiced)}</TableCell>
-                    <TableCell className="tabular-nums text-muted-foreground">
-                      {formatMoney(c.collected)}
-                    </TableCell>
-                    <TableCell className="tabular-nums font-medium">
-                      {formatMoney(c.outstanding)}
-                    </TableCell>
-                  </TableRow>
+                  <div key={c.name} className="space-y-2 rounded-lg border border-border p-4">
+                    <div className="font-medium">{c.name}</div>
+                    <MoneyRow label="الفواتير" value={formatMoney(c.invoiced)} />
+                    <MoneyRow label="المُحصّل" value={formatMoney(c.collected)} muted />
+                    <MoneyRow label="المتبقّي" value={formatMoney(c.outstanding)} strong />
+                  </div>
                 ))}
-              </TableBody>
-            </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
@@ -242,37 +258,83 @@ export default async function ReportsPage({
           {projectRows.length === 0 ? (
             <p className="text-sm text-muted-foreground">لا توجد بيانات بعد.</p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>المشروع</TableHead>
-                  <TableHead>قيمة العقد</TableHead>
-                  <TableHead>الفواتير</TableHead>
-                  <TableHead>المُحصّل</TableHead>
-                  <TableHead>المتبقّي للفوترة</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            <>
+              {/* Desktop (and print): table — print:block guards narrow print viewports */}
+              <div className="hidden print:block md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>المشروع</TableHead>
+                      <TableHead>قيمة العقد</TableHead>
+                      <TableHead>الفواتير</TableHead>
+                      <TableHead>المُحصّل</TableHead>
+                      <TableHead>المتبقّي للفوترة</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {projectRows.map((p) => (
+                      <TableRow key={p.name}>
+                        <TableCell className="font-medium">{p.name}</TableCell>
+                        <TableCell className="tabular-nums text-muted-foreground">
+                          {p.contract != null ? formatMoney(p.contract) : "—"}
+                        </TableCell>
+                        <TableCell className="tabular-nums">{formatMoney(p.invoiced)}</TableCell>
+                        <TableCell className="tabular-nums text-muted-foreground">
+                          {formatMoney(p.collected)}
+                        </TableCell>
+                        <TableCell className="tabular-nums">
+                          {p.remaining != null ? formatMoney(p.remaining) : "—"}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              {/* Mobile: stacked money cards — the 360px overflow fix (B2) */}
+              <div className="space-y-3 print:hidden md:hidden">
                 {projectRows.map((p) => (
-                  <TableRow key={p.name}>
-                    <TableCell className="font-medium">{p.name}</TableCell>
-                    <TableCell className="tabular-nums text-muted-foreground">
-                      {p.contract != null ? formatMoney(p.contract) : "—"}
-                    </TableCell>
-                    <TableCell className="tabular-nums">{formatMoney(p.invoiced)}</TableCell>
-                    <TableCell className="tabular-nums text-muted-foreground">
-                      {formatMoney(p.collected)}
-                    </TableCell>
-                    <TableCell className="tabular-nums">
-                      {p.remaining != null ? formatMoney(p.remaining) : "—"}
-                    </TableCell>
-                  </TableRow>
+                  <div key={p.name} className="space-y-2 rounded-lg border border-border p-4">
+                    <div className="font-medium">{p.name}</div>
+                    <MoneyRow
+                      label="قيمة العقد"
+                      value={p.contract != null ? formatMoney(p.contract) : "—"}
+                      muted
+                    />
+                    <MoneyRow label="الفواتير" value={formatMoney(p.invoiced)} />
+                    <MoneyRow label="المُحصّل" value={formatMoney(p.collected)} muted />
+                    <MoneyRow
+                      label="المتبقّي للفوترة"
+                      value={p.remaining != null ? formatMoney(p.remaining) : "—"}
+                      strong
+                    />
+                  </div>
                 ))}
-              </TableBody>
-            </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+function MoneyRow({
+  label,
+  value,
+  muted,
+  strong,
+}: {
+  label: string;
+  value: string;
+  muted?: boolean;
+  strong?: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2 text-sm">
+      <span className="text-muted-foreground">{label}</span>
+      <span className={`tabular-nums ${strong ? "font-medium" : ""} ${muted ? "text-muted-foreground" : ""}`}>
+        {value}
+      </span>
     </div>
   );
 }

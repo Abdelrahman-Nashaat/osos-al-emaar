@@ -46,10 +46,20 @@ export default async function DashboardPage() {
 
 async function FinanceWidgets() {
   const supabase = await createClient();
-  const [{ data: invoices }, { data: payments }] = await Promise.all([
+  const [invRes, payRes] = await Promise.all([
     supabase.from("invoices").select("id, status, issue_date, due_date, total, amount_paid"),
     supabase.from("payments").select("invoice_id, amount, paid_at, is_reversed"),
   ]);
+  // Secondary widget: surface a fetch failure inline — never render zeros (B4).
+  if (invRes.error || payRes.error) {
+    console.error("[dashboard.finance]", {
+      inv: invRes.error?.message,
+      pay: payRes.error?.message,
+    });
+    return <WidgetError label="البيانات المالية" />;
+  }
+  const invoices = invRes.data;
+  const payments = payRes.data;
 
   // Money KPIs count ISSUED invoices only (sent/partially_paid/paid) — drafts are
   // not receivables and void is cancelled. Collected = non-reversed payments on
@@ -107,9 +117,13 @@ async function FinanceWidgets() {
 async function TaskWidgets({ userId, isManager }: { userId: string; isManager: boolean }) {
   const supabase = await createClient();
 
-  const { data: tasks } = await supabase
+  const { data: tasks, error } = await supabase
     .from("tasks")
     .select("id, title, status, priority, due_at, current_assignee_id");
+  if (error) {
+    console.error("[dashboard.tasks]", { message: error.message });
+    return <WidgetError label="بيانات المهام" />;
+  }
   const list = tasks ?? [];
 
   const mineOpen = list.filter(
@@ -163,9 +177,20 @@ async function TaskWidgets({ userId, isManager }: { userId: string; isManager: b
   );
 }
 
+function WidgetError({ label }: { label: string }) {
+  return (
+    <div
+      role="alert"
+      className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"
+    >
+      تعذّر تحميل {label}. أعد تحميل الصفحة.
+    </div>
+  );
+}
+
 async function RecentActivity({ titles }: { titles: Map<string, string> }) {
   const supabase = await createClient();
-  const [{ data: events }, { data: directory }] = await Promise.all([
+  const [{ data: events, error: eventsError }, { data: directory }] = await Promise.all([
     supabase
       .from("task_events")
       .select("id, event_type, created_at, actor_id, task_id")
@@ -173,6 +198,10 @@ async function RecentActivity({ titles }: { titles: Map<string, string> }) {
       .limit(6),
     supabase.rpc("team_directory"),
   ]);
+  if (eventsError) {
+    console.error("[dashboard.activity]", { message: eventsError.message });
+    return <WidgetError label="آخر النشاط" />;
+  }
   const nameById = new Map((directory ?? []).map((p) => [p.id, p.full_name] as const));
   const rows = events ?? [];
 

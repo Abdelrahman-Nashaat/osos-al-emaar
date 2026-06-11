@@ -110,6 +110,15 @@ export async function createInvoice(formData: FormData): Promise<ActionState> {
   if ((dueDate && !DATE_RE.test(dueDate)) || (issueDate && !DATE_RE.test(issueDate))) {
     return { error: "تاريخ غير صحيح." };
   }
+  // Cross-field date rules (B8). +48h grace absorbs the KSA/UTC offset.
+  const farFuture = new Date(Date.now() + 48 * 3600 * 1000).toISOString().slice(0, 10);
+  if (issueDate && issueDate > farFuture) {
+    return { error: "تاريخ الإصدار غير منطقي (في المستقبل)." };
+  }
+  const effectiveIssue = issueDate ?? new Date().toISOString().slice(0, 10);
+  if (dueDate && dueDate < effectiveIssue) {
+    return { error: "تاريخ الإصدار يجب أن يسبق تاريخ الاستحقاق أو يساويه." };
+  }
 
   const supabase = await createClient();
   const { error } = await supabase.rpc("invoice_create", {
@@ -146,6 +155,19 @@ export async function updateInvoice(formData: FormData): Promise<ActionState> {
   if (dueDate && !DATE_RE.test(dueDate)) return { error: "تاريخ غير صحيح." };
 
   const supabase = await createClient();
+
+  // The due date may not precede the stored issue date (B8).
+  if (dueDate) {
+    const { data: inv } = await supabase
+      .from("invoices")
+      .select("issue_date")
+      .eq("id", invoiceId)
+      .maybeSingle();
+    if (inv?.issue_date && dueDate < inv.issue_date) {
+      return { error: "تاريخ الإصدار يجب أن يسبق تاريخ الاستحقاق أو يساويه." };
+    }
+  }
+
   const { error } = await supabase.rpc("invoice_update", {
     p_invoice: invoiceId,
     p_subtotal: sub.value,
@@ -200,6 +222,24 @@ export async function recordPayment(formData: FormData): Promise<ActionState> {
   if (paidAt && !DATE_RE.test(paidAt)) return { error: "تاريخ غير صحيح." };
 
   const supabase = await createClient();
+
+  // Payment-date sanity (B8): not in the future (+48h UTC grace) and not before
+  // the invoice's issue date.
+  if (paidAt) {
+    const farFuture = new Date(Date.now() + 48 * 3600 * 1000).toISOString().slice(0, 10);
+    if (paidAt > farFuture) {
+      return { error: "تاريخ الدفع لا يمكن أن يكون في المستقبل." };
+    }
+    const { data: inv } = await supabase
+      .from("invoices")
+      .select("issue_date")
+      .eq("id", invoiceId)
+      .maybeSingle();
+    if (inv?.issue_date && paidAt < inv.issue_date) {
+      return { error: "تاريخ الدفع لا يمكن أن يسبق تاريخ إصدار الفاتورة." };
+    }
+  }
+
   const { error } = await supabase.rpc("invoice_record_payment", {
     p_invoice: invoiceId,
     p_amount: amt.value,

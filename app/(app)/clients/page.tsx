@@ -38,7 +38,7 @@ export default async function ClientsPage() {
         {canEdit ? (
           <ClientFormDialog
             trigger={
-              <Button className="shrink-0">
+              <Button className="shrink-0" aria-label="إضافة عميل">
                 <Plus className="size-4" />
                 <span className="hidden sm:inline">إضافة عميل</span>
               </Button>

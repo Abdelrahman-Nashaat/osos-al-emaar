@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { toast } from "sonner";
+import { useActionResult } from "@/components/use-action-result";
 import { createInvoice, updateInvoice } from "./actions";
 import { VAT_RATES, VAT_RATE_LABELS } from "@/lib/finance/invoice";
 import { Button } from "@/components/ui/button";
@@ -48,16 +48,25 @@ export function InvoiceFormDialog({
 }) {
   const isEdit = !!invoice;
   const [open, setOpen] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const onResult = useActionResult();
 
   function handleSubmit(formData: FormData) {
+    // Instant cross-field check (the server re-validates — B8).
+    const issue = String(formData.get("issue_date") ?? "");
+    const due = String(formData.get("due_date") ?? "");
+    if (issue && due && due < issue) {
+      setFormError("تاريخ الإصدار يجب أن يسبق تاريخ الاستحقاق أو يساويه.");
+      return;
+    }
     startTransition(async () => {
       const res = isEdit ? await updateInvoice(formData) : await createInvoice(formData);
-      if (res.error) {
-        toast.error(res.error);
-      } else {
-        toast.success(res.success ?? "تم");
+      if (onResult(res)) {
+        setFormError(null);
         setOpen(false);
+      } else {
+        setFormError(res.error ?? null);
       }
     });
   }
@@ -68,7 +77,13 @@ export function InvoiceFormDialog({
     : "";
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (!o) setFormError(null);
+      }}
+    >
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="max-h-[90svh] overflow-y-auto">
         <DialogHeader>
@@ -79,7 +94,7 @@ export function InvoiceFormDialog({
               : "أنشئ فاتورة لمشروع — تُحسب الضريبة والإجمالي تلقائياً."}
           </DialogDescription>
         </DialogHeader>
-        <form action={handleSubmit} className="grid gap-3 sm:grid-cols-2">
+        <form action={handleSubmit} noValidate className="grid gap-3 sm:grid-cols-2">
           {isEdit ? <input type="hidden" name="invoice_id" value={invoice.id} /> : null}
 
           <div className="space-y-2 sm:col-span-2">
@@ -163,6 +178,11 @@ export function InvoiceFormDialog({
             </div>
           ) : null}
 
+          {formError ? (
+            <p role="alert" className="text-sm text-destructive sm:col-span-2">
+              {formError}
+            </p>
+          ) : null}
           <DialogFooter className="sm:col-span-2">
             <Button type="submit" disabled={pending}>
               {pending ? "جارٍ الحفظ…" : isEdit ? "حفظ" : "إنشاء الفاتورة"}

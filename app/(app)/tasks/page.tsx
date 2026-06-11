@@ -91,7 +91,7 @@ export default async function TasksPage({
             projects={projectRows ?? []}
             engineers={engineers}
             trigger={
-              <Button className="shrink-0">
+              <Button className="shrink-0" aria-label="مهمة جديدة">
                 <Plus className="size-4" />
                 <span className="hidden sm:inline">مهمة جديدة</span>
               </Button>

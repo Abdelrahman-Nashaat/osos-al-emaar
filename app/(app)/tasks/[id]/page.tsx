@@ -25,13 +25,18 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
   const isManager = session.profile.role === "manager";
 
   const supabase = await createClient();
-  const { data: task } = await supabase
+  const { data: task, error: taskError } = await supabase
     .from("tasks")
     .select(
       "id, title, description, status, priority, progress, due_at, current_assignee_id, project_id",
     )
     .eq("id", id)
     .single();
+  // PGRST116 = zero rows for .single() → a true 404. Anything else is a real
+  // failure and must surface in error.tsx, never as a fake not-found (B4).
+  if (taskError && taskError.code !== "PGRST116") {
+    throw new Error(`fetch_failed: task ${taskError.message}`);
+  }
   if (!task) notFound();
 
   // Parent project — operational only. No project_financials is fetched here, so an
@@ -108,6 +113,7 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
         </CardHeader>
         <CardContent>
           <TaskActions
+            currentAssigneeId={task.current_assignee_id}
             taskId={task.id}
             projectId={task.project_id}
             progress={task.progress}

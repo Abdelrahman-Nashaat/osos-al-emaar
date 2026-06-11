@@ -61,11 +61,11 @@ export function ProjectTasksCard({
                     href={`/tasks/${t.id}`}
                     className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border px-3 py-2 hover:bg-muted"
                   >
-                    <span className="flex items-center gap-2 text-sm">
+                    <span className="flex min-w-0 items-center gap-2 text-sm">
                       <TaskStatusBadge status={t.status} />
                       <span className="font-medium">{t.title}</span>
                     </span>
-                    <span className="flex items-center gap-3 text-xs text-muted-foreground">
+                    <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                       <span>{t.assignee_name ?? "غير مُسندة"}</span>
                       {t.due_at ? (
                         <span

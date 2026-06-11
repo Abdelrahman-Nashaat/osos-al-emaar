@@ -26,13 +26,17 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
   const canViewProject = can(perms, "projects.view");
 
   const supabase = await createClient();
-  const { data: invoice } = await supabase
+  const { data: invoice, error: invoiceError } = await supabase
     .from("invoices")
     .select(
       "id, invoice_number, project_id, client_id, status, issue_date, due_date, subtotal, vat_rate, vat_amount, total, amount_paid, currency, description",
     )
     .eq("id", id)
     .single();
+  // PGRST116 = zero rows → true 404; any other failure surfaces in error.tsx (B4).
+  if (invoiceError && invoiceError.code !== "PGRST116") {
+    throw new Error(`fetch_failed: invoice ${invoiceError.message}`);
+  }
   if (!invoice) notFound();
 
   const [

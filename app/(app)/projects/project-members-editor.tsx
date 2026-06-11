@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { toast } from "sonner";
 import { UserPlus, X } from "lucide-react";
-import { addProjectMember, removeProjectMember, type ActionState } from "./actions";
+import { useActionResult } from "@/components/use-action-result";
+import { addProjectMember, removeProjectMember } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -17,7 +17,7 @@ const ROLE_LABEL: Record<string, string> = {
 };
 
 const SELECT_CLASS =
-  "h-10 flex-1 rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50";
+  "h-10 min-w-0 flex-1 rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50";
 
 export function ProjectMembersEditor({
   projectId,
@@ -32,23 +32,22 @@ export function ProjectMembersEditor({
 }) {
   const [pending, startTransition] = useTransition();
   const [selected, setSelected] = useState("");
+  const onResult = useActionResult();
 
   const memberIds = new Set(members.map((m) => m.user_id));
   const options = assignable.filter((a) => !memberIds.has(a.id));
 
-  function notify(res: ActionState) {
-    if (res.error) toast.error(res.error);
-    else toast.success(res.success ?? "تم");
-  }
   function add() {
     if (!selected) return;
     startTransition(async () => {
-      notify(await addProjectMember(projectId, selected));
+      onResult(await addProjectMember(projectId, selected));
       setSelected("");
     });
   }
   function remove(userId: string) {
-    startTransition(async () => notify(await removeProjectMember(projectId, userId)));
+    startTransition(async () => {
+      onResult(await removeProjectMember(projectId, userId));
+    });
   }
 
   return (

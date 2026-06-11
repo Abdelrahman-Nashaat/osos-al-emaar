@@ -37,11 +37,15 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
 
   const supabase = await createClient();
 
-  const { data: project } = await supabase
+  const { data: project, error: projectError } = await supabase
     .from("projects")
     .select("id, name, code, status, progress, start_date, due_date, description, client_id")
     .eq("id", id)
     .single();
+  // PGRST116 = zero rows → true 404; anything else surfaces in error.tsx (B4).
+  if (projectError && projectError.code !== "PGRST116") {
+    throw new Error(`fetch_failed: project ${projectError.message}`);
+  }
   if (!project) notFound();
 
   // Client — operational, read-only. Engineers see this inside the project view
@@ -119,7 +123,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     currency: string;
   }[] = [];
   if (showFinancials) {
-    const [{ data: fin }, { data: inv }] = await Promise.all([
+    const [finRes, invRes] = await Promise.all([
       supabase
         .from("project_financials")
         .select("budget, contract_value, cost, currency, notes")
@@ -131,8 +135,14 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         .eq("project_id", id)
         .order("created_at", { ascending: false }),
     ]);
-    financials = fin ?? null;
-    projectInvoices = inv ?? [];
+    // Money surfaces never degrade silently (B4).
+    if (finRes.error || invRes.error) {
+      throw new Error(
+        `fetch_failed: project financials ${finRes.error?.message ?? invRes.error?.message}`,
+      );
+    }
+    financials = finRes.data ?? null;
+    projectInvoices = invRes.data ?? [];
   }
 
   // Pickers for the edit form + member assignment — only when the viewer can edit.
@@ -179,7 +189,9 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           <div className="flex items-center gap-2">
             <StatusBadge status={project.status} />
             {project.code ? (
-              <span className="text-sm text-muted-foreground">{project.code}</span>
+              <bdi dir="ltr" className="text-sm tabular-nums text-muted-foreground">
+                {project.code}
+              </bdi>
             ) : null}
           </div>
         </div>

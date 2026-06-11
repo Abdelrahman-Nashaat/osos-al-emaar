@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { toast } from "sonner";
 import { Undo2 } from "lucide-react";
+import { useActionResult } from "@/components/use-action-result";
 import { reversePayment } from "./actions";
 import { PAYMENT_METHOD_LABELS, type PaymentMethod } from "@/lib/finance/invoice";
 import { formatMoney } from "@/lib/projects/money";
@@ -77,7 +77,7 @@ export function PaymentsList({
                 </span>
               ) : null}
             </div>
-            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
               <span dir="ltr" className="tabular-nums">
                 {p.paid_at.slice(0, 10)}
               </span>
@@ -112,15 +112,10 @@ function ReverseDialog({
 }) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
+  const onResult = useActionResult();
   function handleSubmit(formData: FormData) {
     startTransition(async () => {
-      const res = await reversePayment(formData);
-      if (res.error) {
-        toast.error(res.error);
-      } else {
-        toast.success(res.success ?? "تم");
-        setOpen(false);
-      }
+      if (onResult(await reversePayment(formData))) setOpen(false);
     });
   }
   return (

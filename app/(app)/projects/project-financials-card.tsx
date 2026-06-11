@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { toast } from "sonner";
 import { Pencil } from "lucide-react";
+import { useActionResult } from "@/components/use-action-result";
 import { setProjectFinancials } from "./actions";
 import { formatMoney } from "@/lib/projects/money";
 import { Button } from "@/components/ui/button";
@@ -79,16 +79,11 @@ function FinancialsDialog({
 }) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
+  const onResult = useActionResult();
 
   function handleSubmit(formData: FormData) {
     startTransition(async () => {
-      const res = await setProjectFinancials(formData);
-      if (res.error) {
-        toast.error(res.error);
-      } else {
-        toast.success(res.success ?? "تم");
-        setOpen(false);
-      }
+      if (onResult(await setProjectFinancials(formData))) setOpen(false);
     });
   }
 

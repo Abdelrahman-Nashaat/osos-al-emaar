@@ -70,7 +70,7 @@ export default async function ProjectsPage() {
           <ProjectFormDialog
             clients={clientOptions}
             trigger={
-              <Button className="shrink-0">
+              <Button className="shrink-0" aria-label="مشروع جديد">
                 <Plus className="size-4" />
                 <span className="hidden sm:inline">مشروع جديد</span>
               </Button>

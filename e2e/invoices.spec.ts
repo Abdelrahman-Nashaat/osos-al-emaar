@@ -372,6 +372,40 @@ test("manager UI: records a payment and an overdue invoice shows red", async ({ 
   await page.getByLabel("المبلغ (ر.س)").fill("400");
   await page.getByRole("button", { name: "تسجيل الدفعة" }).click();
   await expect(page.getByText("مدفوعة جزئياً").first()).toBeVisible();
+
+  // B8: a future payment date is rejected with the precise Arabic rule, inline.
+  await page.getByRole("button", { name: "تسجيل دفعة" }).click();
+  await page.getByLabel("المبلغ (ر.س)").fill("50");
+  await page.locator("#pay-date").fill("2030-01-01");
+  await page.getByRole("button", { name: "تسجيل الدفعة" }).click();
+  // The message appears inline (role=alert) and as a toast — assert the inline one.
+  await expect(
+    page.getByRole("alert").filter({ hasText: "تاريخ الدفع لا يمكن أن يكون في المستقبل." }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  // B5 freshness: a تحصيل note shows up in the timeline WITHOUT a reload.
+  await page.getByRole("button", { name: "ملاحظة تحصيل" }).click();
+  await page.locator("#c-note").fill(`متابعة تحصيل ${ts}`);
+  await page.getByRole("button", { name: "إضافة", exact: true }).click();
+  await expect(page.getByText(`متابعة تحصيل ${ts}`)).toBeVisible();
+});
+
+test("invoice form rejects due-before-issue with an inline Arabic message (B8)", async ({
+  page,
+}) => {
+  await login(page, mgr.email, mgr.password);
+  await page.goto("/invoices");
+  await page.getByRole("button", { name: "فاتورة جديدة" }).click();
+  await page.locator("#i-project").selectOption(projectId);
+  await page.locator("#i-subtotal").fill("100");
+  await page.locator("#i-issue").fill("2026-06-10");
+  await page.locator("#i-due").fill("2026-06-01");
+  await page.getByRole("button", { name: "إنشاء الفاتورة" }).click();
+  await expect(
+    page.getByText("تاريخ الإصدار يجب أن يسبق تاريخ الاستحقاق أو يساويه."),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
 });
 
 test("accountant UI: has Invoices + Reports nav, can record a payment, but no Void/Delete", async ({

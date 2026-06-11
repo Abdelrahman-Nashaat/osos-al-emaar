@@ -91,6 +91,11 @@ export async function saveProject(formData: FormData): Promise<ActionState> {
   const { id, name, code, client_id, status, progress, start_date, due_date, description } =
     parsed.data;
 
+  // Cross-field date rule (B8) — also checked inline in the form for instant UX.
+  if (start_date && due_date && due_date < start_date) {
+    return { error: "تاريخ البدء يجب أن يسبق تاريخ الاستحقاق أو يساويه." };
+  }
+
   const supabase = await createClient();
   const row = {
     name,

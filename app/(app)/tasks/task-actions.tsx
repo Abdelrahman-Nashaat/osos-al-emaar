@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
+import { useActionResult } from "@/components/use-action-result";
 import {
   Play,
   Send,
@@ -68,12 +68,14 @@ export function TaskActions({
   progress,
   actions,
   assignable,
+  currentAssigneeId,
 }: {
   taskId: string;
   projectId: string;
   progress: number;
   actions: TaskAction[];
   assignable: Engineer[];
+  currentAssigneeId?: string | null;
 }) {
   const has = (a: TaskAction) => actions.includes(a);
   if (actions.length === 0) {
@@ -147,6 +149,7 @@ export function TaskActions({
           taskId={taskId}
           projectId={projectId}
           assignable={assignable}
+          excludeId={currentAssigneeId}
           title="نقل المهمة إلى مهندس آخر"
           confirmLabel="نقل"
           trigger={
@@ -197,21 +200,12 @@ export function TaskActions({
   );
 }
 
-/** Shared toast handler for a transition result. Returns true on success. */
-function notify(res: ActionState): boolean {
-  if (res.error) {
-    toast.error(res.error);
-    return false;
-  }
-  toast.success(res.success ?? "تم");
-  return true;
-}
-
 function StartButton({ taskId, projectId }: { taskId: string; projectId: string }) {
   const [pending, startTransition] = useTransition();
+  const onResult = useActionResult();
   function handleSubmit(formData: FormData) {
     startTransition(async () => {
-      notify(await startTask(formData));
+      onResult(await startTask(formData));
     });
   }
   // A form action (not an imperative call) so the router refreshes the page and the
@@ -250,9 +244,10 @@ function ConfirmDialog({
 }) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
+  const onResult = useActionResult();
   function handleSubmit(formData: FormData) {
     startTransition(async () => {
-      if (notify(await action(formData))) setOpen(false);
+      if (onResult(await action(formData))) setOpen(false);
     });
   }
   return (
@@ -292,9 +287,10 @@ function ProgressDialog({
 }) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
+  const onResult = useActionResult();
   function handleSubmit(formData: FormData) {
     startTransition(async () => {
-      if (notify(await updateTaskProgress(formData))) setOpen(false);
+      if (onResult(await updateTaskProgress(formData))) setOpen(false);
     });
   }
   return (
@@ -344,6 +340,7 @@ function AssignDialog({
   taskId,
   projectId,
   assignable,
+  excludeId,
   title,
   confirmLabel,
   trigger,
@@ -351,15 +348,19 @@ function AssignDialog({
   taskId: string;
   projectId: string;
   assignable: Engineer[];
+  /** Handoff: the CURRENT assignee is excluded — reassigning to the same holder is a DB-rejected no-op (same_assignee). */
+  excludeId?: string | null;
   title: string;
   confirmLabel: string;
   trigger: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
+  const onResult = useActionResult();
+  const options = excludeId ? assignable.filter((e) => e.id !== excludeId) : assignable;
   function handleSubmit(formData: FormData) {
     startTransition(async () => {
-      if (notify(await assignTask(formData))) setOpen(false);
+      if (onResult(await assignTask(formData))) setOpen(false);
     });
   }
   return (
@@ -377,9 +378,9 @@ function AssignDialog({
             <Label htmlFor="a-assignee">المهندس</Label>
             <select id="a-assignee" name="assignee" required defaultValue="" className={SELECT_CLASS}>
               <option value="" disabled>
-                {assignable.length === 0 ? "لا يوجد مهندسون نشطون" : "— اختر مهندساً —"}
+                {options.length === 0 ? "لا يوجد مهندسون آخرون متاحون" : "— اختر مهندساً —"}
               </option>
-              {assignable.map((e) => (
+              {options.map((e) => (
                 <option key={e.id} value={e.id}>
                   {e.full_name}
                 </option>
@@ -391,7 +392,7 @@ function AssignDialog({
             <Textarea id="a-note" name="note" rows={2} />
           </div>
           <DialogFooter>
-            <Button type="submit" disabled={pending || assignable.length === 0}>
+            <Button type="submit" disabled={pending || options.length === 0}>
               {pending ? "جارٍ التنفيذ…" : confirmLabel}
             </Button>
           </DialogFooter>
@@ -405,9 +406,10 @@ function MilestoneDialog({ taskId, projectId }: { taskId: string; projectId: str
   const [open, setOpen] = useState(false);
   const [label, setLabel] = useState("");
   const [pending, startTransition] = useTransition();
+  const onResult = useActionResult();
   function handleSubmit(formData: FormData) {
     startTransition(async () => {
-      if (notify(await addTaskMilestone(formData))) {
+      if (onResult(await addTaskMilestone(formData))) {
         setOpen(false);
         setLabel("");
       }
@@ -465,9 +467,10 @@ function MilestoneDialog({ taskId, projectId }: { taskId: string; projectId: str
 function DeleteTaskDialog({ taskId, projectId }: { taskId: string; projectId: string }) {
   const [pending, startTransition] = useTransition();
   const router = useRouter();
+  const onResult = useActionResult();
   function onDelete() {
     startTransition(async () => {
-      if (notify(await deleteTask(taskId, projectId))) router.push("/tasks");
+      if (onResult(await deleteTask(taskId, projectId))) router.push("/tasks");
     });
   }
   return (

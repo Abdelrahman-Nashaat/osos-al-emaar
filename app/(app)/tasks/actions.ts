@@ -26,6 +26,7 @@ function field(v: FormDataEntryValue | null): string | undefined {
 const RPC_ERRORS: Record<string, string> = {
   not_authorized: "لا تملك صلاحية تنفيذ هذا الإجراء.",
   illegal_transition: "لا يمكن تنفيذ هذا الإجراء على حالة المهمة الحالية.",
+  same_assignee: "المهمة مُسندة بالفعل لهذا المهندس.",
   invalid_assignee: "يجب إسناد المهمة إلى مهندس نشِط.",
   task_not_found: "المهمة غير موجودة.",
   invalid_project: "المشروع غير صالح.",

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { toast } from "sonner";
+import { useActionResult } from "@/components/use-action-result";
 import { saveClient } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,16 +38,11 @@ export function ClientFormDialog({
   const isEdit = Boolean(client);
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
+  const onResult = useActionResult();
 
   function handleSubmit(formData: FormData) {
     startTransition(async () => {
-      const res = await saveClient(formData);
-      if (res.error) {
-        toast.error(res.error);
-      } else {
-        toast.success(res.success ?? "تم");
-        setOpen(false);
-      }
+      if (onResult(await saveClient(formData))) setOpen(false);
     });
   }
 

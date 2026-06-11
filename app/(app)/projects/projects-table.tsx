@@ -2,6 +2,7 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { isOverdue, type ProjectStatus } from "@/lib/projects/status";
 import { formatMoney } from "@/lib/projects/money";
+import { ProjectCode } from "@/lib/projects/label";
 import { StatusBadge } from "./status-badge";
 import { ProgressBar } from "./progress-bar";
 import {
@@ -63,9 +64,7 @@ export function ProjectsTable({
                   <Link href={`/projects/${p.id}`} className="hover:underline">
                     {p.name}
                   </Link>
-                  {p.code ? (
-                    <span className="ms-2 text-xs text-muted-foreground">{p.code}</span>
-                  ) : null}
+                  <ProjectCode code={p.code} />
                 </TableCell>
                 <TableCell className="text-muted-foreground">{p.client_name ?? "—"}</TableCell>
                 <TableCell>
@@ -97,11 +96,9 @@ export function ProjectsTable({
             className="flex flex-col gap-3 rounded-lg border border-border p-4"
           >
             <div className="flex items-start justify-between gap-2">
-              <div className="font-medium">
+              <div className="min-w-0 font-medium">
                 {p.name}
-                {p.code ? (
-                  <span className="ms-2 text-xs text-muted-foreground">{p.code}</span>
-                ) : null}
+                <ProjectCode code={p.code} />
               </div>
               <StatusBadge status={p.status} />
             </div>

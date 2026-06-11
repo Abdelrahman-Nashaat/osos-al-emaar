@@ -17,9 +17,11 @@ export function ProgressBar({
       <div
         className="h-2 flex-1 overflow-hidden rounded-full bg-muted"
         role="progressbar"
+        aria-label="نسبة الإنجاز"
         aria-valuenow={pct}
         aria-valuemin={0}
         aria-valuemax={100}
+        aria-valuetext={`${pct}%`}
       >
         <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${pct}%` }} />
       </div>

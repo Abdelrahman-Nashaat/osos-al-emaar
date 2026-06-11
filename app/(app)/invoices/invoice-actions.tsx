@@ -2,8 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
 import { Send, CreditCard, MessageSquarePlus, Ban, Trash2, Pencil } from "lucide-react";
+import { useActionResult } from "@/components/use-action-result";
 import {
   sendInvoice,
   recordPayment,
@@ -151,16 +151,6 @@ export function InvoiceActions({
   );
 }
 
-/** Shared toast handler for a transition result. Returns true on success. */
-function notify(res: ActionState): boolean {
-  if (res.error) {
-    toast.error(res.error);
-    return false;
-  }
-  toast.success(res.success ?? "تم");
-  return true;
-}
-
 /** Generic confirm dialog with an optional/required note → send/note/void. */
 function ConfirmDialog({
   action,
@@ -185,9 +175,10 @@ function ConfirmDialog({
 }) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
+  const onResult = useActionResult();
   function handleSubmit(formData: FormData) {
     startTransition(async () => {
-      if (notify(await action(formData))) setOpen(false);
+      if (onResult(await action(formData))) setOpen(false);
     });
   }
   return (
@@ -218,14 +209,29 @@ function ConfirmDialog({
 
 function PaymentDialog({ invoiceId, projectId }: { invoiceId: string; projectId: string }) {
   const [open, setOpen] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const onResult = useActionResult();
+  const today = new Date().toISOString().slice(0, 10);
   function handleSubmit(formData: FormData) {
     startTransition(async () => {
-      if (notify(await recordPayment(formData))) setOpen(false);
+      const res = await recordPayment(formData);
+      if (onResult(res)) {
+        setFormError(null);
+        setOpen(false);
+      } else {
+        setFormError(res.error ?? null);
+      }
     });
   }
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (!o) setFormError(null);
+      }}
+    >
       <DialogTrigger asChild>
         <Button>
           <CreditCard className="size-4" />
@@ -237,7 +243,7 @@ function PaymentDialog({ invoiceId, projectId }: { invoiceId: string; projectId:
           <DialogTitle>تسجيل دفعة</DialogTitle>
           <DialogDescription>لا يمكن أن تتجاوز الدفعة المبلغ المتبقّي على الفاتورة.</DialogDescription>
         </DialogHeader>
-        <form action={handleSubmit} className="grid gap-3 sm:grid-cols-2">
+        <form action={handleSubmit} noValidate className="grid gap-3 sm:grid-cols-2">
           <input type="hidden" name="invoice_id" value={invoiceId} />
           <input type="hidden" name="project_id" value={projectId} />
           <div className="space-y-2">
@@ -256,7 +262,7 @@ function PaymentDialog({ invoiceId, projectId }: { invoiceId: string; projectId:
           </div>
           <div className="space-y-2">
             <Label htmlFor="pay-date">تاريخ الدفع</Label>
-            <Input id="pay-date" name="paid_at" type="date" dir="ltr" />
+            <Input id="pay-date" name="paid_at" type="date" dir="ltr" max={today} />
           </div>
           <div className="space-y-2">
             <Label htmlFor="pay-ref">مرجع (اختياري)</Label>
@@ -266,6 +272,11 @@ function PaymentDialog({ invoiceId, projectId }: { invoiceId: string; projectId:
             <Label htmlFor="pay-note">ملاحظة (اختياري)</Label>
             <Textarea id="pay-note" name="note" rows={2} />
           </div>
+          {formError ? (
+            <p role="alert" className="text-sm text-destructive sm:col-span-2">
+              {formError}
+            </p>
+          ) : null}
           <DialogFooter className="sm:col-span-2">
             <Button type="submit" disabled={pending}>
               {pending ? "جارٍ الحفظ…" : "تسجيل الدفعة"}
@@ -280,12 +291,13 @@ function PaymentDialog({ invoiceId, projectId }: { invoiceId: string; projectId:
 function DeleteInvoiceDialog({ invoiceId, projectId }: { invoiceId: string; projectId: string }) {
   const [pending, startTransition] = useTransition();
   const router = useRouter();
+  const onResult = useActionResult();
   function onDelete() {
     const fd = new FormData();
     fd.set("invoice_id", invoiceId);
     if (projectId) fd.set("project_id", projectId);
     startTransition(async () => {
-      if (notify(await deleteInvoice(fd))) router.push("/invoices");
+      if (onResult(await deleteInvoice(fd))) router.push("/invoices");
     });
   }
   return (

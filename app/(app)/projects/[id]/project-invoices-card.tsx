@@ -59,13 +59,14 @@ export function ProjectInvoicesCard({
                     href={`/invoices/${inv.id}`}
                     className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border px-3 py-2 hover:bg-muted"
                   >
-                    <span className="flex items-center gap-2 text-sm">
+                    <span className="flex min-w-0 items-center gap-2 text-sm">
                       <InvoiceStatusBadge status={inv.status} />
                       <span className="font-medium" dir="ltr">
                         {inv.invoice_number}
                       </span>
                     </span>
-                    <span className="flex items-center gap-3 text-xs text-muted-foreground">
+                    {/* flex-wrap + min-w-0: this row was the /projects/[id] 360px overflow (B2). */}
+                    <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                       <span className="tabular-nums">{formatMoney(inv.total, inv.currency)}</span>
                       <span className="tabular-nums">
                         المتبقّي {formatMoney(outstanding(inv.total, inv.amount_paid), inv.currency)}
