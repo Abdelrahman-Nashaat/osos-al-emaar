@@ -22,7 +22,13 @@ export default defineConfig({
     {
       name: "chromium",
       use: { ...devices["Desktop Chrome"], serviceWorkers: "block" },
-      grepInvert: /@mobile/,
+      grepInvert: /@mobile|@pwa/,
+    },
+    {
+      // Service-worker behavior (C1) needs SWs allowed — isolated project.
+      name: "pwa",
+      use: { ...devices["Desktop Chrome"], serviceWorkers: "allow" },
+      grep: /@pwa/,
     },
     {
       name: "mobile-360",

@@ -4,6 +4,7 @@ import { getEffectivePermissions, getSessionProfile } from "@/lib/auth/permissio
 import { createClient } from "@/lib/supabase/server";
 import { can } from "@/lib/auth/permission-keys";
 import { PermissionDenied } from "@/components/permission-denied";
+import { LIST_PAGE_SIZE, Pager, parseListParams, SearchBox } from "@/components/list-controls";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { TasksTable, type TaskListItem } from "./tasks-table";
@@ -13,7 +14,7 @@ import { TaskFormDialog } from "./task-form";
 export default async function TasksPage({
   searchParams,
 }: {
-  searchParams: Promise<{ filter?: string }>;
+  searchParams: Promise<{ filter?: string; q?: string; page?: string }>;
 }) {
   const session = await getSessionProfile();
   if (!session) redirect("/login");
@@ -23,15 +24,23 @@ export default async function TasksPage({
   const canAssign = can(perms, "tasks.assign");
   const myId = session.userId;
 
-  const { filter: filterParam } = await searchParams;
+  const sp = await searchParams;
+  const { filter: filterParam } = sp;
   const filter = parseFilter(filterParam);
+  const { q, page, from } = parseListParams(sp);
 
   const supabase = await createClient();
   const [{ data: rows }, { data: directory }, { data: projectRows }] = await Promise.all([
-    supabase
-      .from("tasks")
-      .select("id, title, status, priority, progress, due_at, current_assignee_id, project_id")
-      .order("created_at", { ascending: false }),
+    q
+      ? supabase
+          .from("tasks")
+          .select("id, title, status, priority, progress, due_at, current_assignee_id, project_id")
+          .ilike("title", `%${q}%`)
+          .order("created_at", { ascending: false })
+      : supabase
+          .from("tasks")
+          .select("id, title, status, priority, progress, due_at, current_assignee_id, project_id")
+          .order("created_at", { ascending: false }),
     supabase.rpc("team_directory"),
     supabase.from("projects").select("id, name").order("name"),
   ]);
@@ -68,7 +77,9 @@ export default async function TasksPage({
   const counts = Object.fromEntries(
     TASK_FILTERS.map((f) => [f, all.filter((t) => matches(t, f)).length]),
   ) as Record<TaskFilter, number>;
-  const tasks: TaskListItem[] = all.filter((t) => matches(t, filter));
+  const filtered: TaskListItem[] = all.filter((t) => matches(t, filter));
+  const hasMore = filtered.length > from + LIST_PAGE_SIZE;
+  const tasks: TaskListItem[] = filtered.slice(from, from + LIST_PAGE_SIZE);
 
   // Active engineers for the create dialog's assignee picker (tasks.assign only).
   const engineers = canAssign
@@ -102,11 +113,24 @@ export default async function TasksPage({
 
       <TaskFilters active={filter} counts={counts} />
 
+      <SearchBox
+        placeholder="ابحث بعنوان المهمة…"
+        q={q}
+        hidden={{ filter: filter === "all" ? undefined : filter }}
+      />
+
       <Card>
         <CardContent className="pt-6">
           <TasksTable tasks={tasks} />
         </CardContent>
       </Card>
+
+      <Pager
+        page={page}
+        hasMore={hasMore}
+        basePath="/tasks"
+        params={{ q, filter: filter === "all" ? undefined : filter }}
+      />
     </div>
   );
 }

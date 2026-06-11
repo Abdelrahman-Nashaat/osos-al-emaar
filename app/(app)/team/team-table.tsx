@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { setMemberActive, setMemberRole, type ActionState } from "./actions";
+import { ResetPasswordButton } from "./reset-password-button";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -107,6 +108,7 @@ export function TeamTable({
               <TableHead>البريد</TableHead>
               <TableHead>الدور</TableHead>
               <TableHead>نشط</TableHead>
+              <TableHead>كلمة المرور</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -127,12 +129,15 @@ export function TeamTable({
                   </TableCell>
                   <TableCell>{roleSelect(m)}</TableCell>
                   <TableCell>{activeSwitch(m)}</TableCell>
+                  <TableCell>
+                    <ResetPasswordButton userId={m.id} disabled={self || pending} />
+                  </TableCell>
                 </TableRow>
               );
             })}
             {members.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={4} className="text-center text-muted-foreground">
+                <TableCell colSpan={5} className="text-center text-muted-foreground">
                   لا يوجد أعضاء بعد.
                 </TableCell>
               </TableRow>
@@ -168,6 +173,10 @@ export function TeamTable({
                 <div className="flex items-center justify-between">
                   <span className="text-sm">نشط</span>
                   {activeSwitch(m)}
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm">كلمة المرور</span>
+                  <ResetPasswordButton userId={m.id} disabled={self || pending} />
                 </div>
               </div>
             );

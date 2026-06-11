@@ -1,9 +1,8 @@
 import { test, expect } from "@playwright/test";
 
-// Phase 4.5 A5 — static security headers + CSP (Report-Only until C7) must be on
-// every response. Asserted via APIRequestContext so redirects don't interfere.
+// Phase 4.5 A5 (static headers) + C7 (ENFORCED nonce CSP from proxy.ts).
 
-test("security headers + CSP-Report-Only are present on responses", async ({ request }) => {
+test("security headers + enforced CSP are present on responses", async ({ request }) => {
   const res = await request.get("/login");
   const h = res.headers();
 
@@ -13,13 +12,19 @@ test("security headers + CSP-Report-Only are present on responses", async ({ req
   expect(h["permissions-policy"] ?? "").toContain("camera=()");
   expect(h["strict-transport-security"] ?? "").toContain("max-age=");
 
-  const csp = h["content-security-policy-report-only"] ?? "";
+  const csp = h["content-security-policy"] ?? "";
   expect(csp).toContain("default-src 'self'");
+  expect(csp).toContain("'strict-dynamic'");
+  expect(csp).toContain("'nonce-");
+  expect(csp).toContain("worker-src 'self'"); // PWA service worker stays registrable
   expect(csp).toContain("frame-ancestors 'none'");
   expect(csp).toContain("object-src 'none'");
-  // Supabase REST + Realtime must stay reachable under the future enforced policy.
+  // Supabase REST + Realtime must stay reachable under the enforced policy.
   expect(csp).toMatch(/connect-src [^;]*https:\/\/[a-z0-9]+\.supabase\.co/);
   expect(csp).toMatch(/connect-src [^;]*wss:\/\/[a-z0-9]+\.supabase\.co/);
+
+  // The Report-Only phase is over.
+  expect(h["content-security-policy-report-only"]).toBeUndefined();
 });
 
 test("the app renders with zero CSP violations on the login page", async ({ page }) => {

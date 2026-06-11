@@ -7,6 +7,7 @@ import {
   BarChart3,
   Building2,
   Contact,
+  DatabaseBackup,
   FolderKanban,
   LayoutDashboard,
   ListChecks,
@@ -46,6 +47,7 @@ const NAV: NavItem[] = [
   { href: "/reports", label: "التقارير", icon: BarChart3, perm: "financials.view" },
   { href: "/team", label: "الفريق", icon: Users, perm: "team.manage" },
   { href: "/settings/permissions", label: "الصلاحيات", icon: ShieldCheck, perm: "permissions.manage" },
+  { href: "/settings/backup", label: "النسخ الاحتياطي", icon: DatabaseBackup, perm: "team.manage" },
 ];
 
 /**

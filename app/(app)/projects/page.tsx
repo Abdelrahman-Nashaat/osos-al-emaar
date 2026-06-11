@@ -4,12 +4,18 @@ import { getEffectivePermissions, getSessionProfile } from "@/lib/auth/permissio
 import { createClient } from "@/lib/supabase/server";
 import { can } from "@/lib/auth/permission-keys";
 import { PermissionDenied } from "@/components/permission-denied";
+import { LIST_PAGE_SIZE, Pager, parseListParams, SearchBox } from "@/components/list-controls";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ProjectsTable, type ProjectListItem } from "./projects-table";
 import { ProjectFormDialog } from "./project-form";
 
-export default async function ProjectsPage() {
+export default async function ProjectsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; page?: string }>;
+}) {
+  const { q, page, from, to } = parseListParams(await searchParams);
   const session = await getSessionProfile();
   if (!session) redirect("/login");
 
@@ -20,10 +26,15 @@ export default async function ProjectsPage() {
 
   const supabase = await createClient();
 
-  const { data: projects } = await supabase
+  let projectsQuery = supabase
     .from("projects")
     .select("id, name, code, client_id, status, progress, due_date")
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .range(from, to); // one extra row → hasMore
+  if (q) projectsQuery = projectsQuery.or(`name.ilike.%${q}%,code.ilike.%${q}%`);
+  const { data: projectRows } = await projectsQuery;
+  const hasMore = (projectRows ?? []).length > LIST_PAGE_SIZE;
+  const projects = (projectRows ?? []).slice(0, LIST_PAGE_SIZE);
 
   // Client names (engineers may read these via projects.view RLS — operational only).
   const { data: allClients } = await supabase.from("clients").select("id, name").order("name");
@@ -41,7 +52,7 @@ export default async function ProjectsPage() {
     }
   }
 
-  const items: ProjectListItem[] = (projects ?? []).map((p) => ({
+  const items: ProjectListItem[] = projects.map((p) => ({
     id: p.id,
     name: p.name,
     code: p.code,
@@ -79,11 +90,15 @@ export default async function ProjectsPage() {
         ) : null}
       </div>
 
+      <SearchBox placeholder="ابحث باسم المشروع أو رمزه…" q={q} />
+
       <Card>
         <CardContent className="pt-6">
           <ProjectsTable projects={items} showFinancials={showFinancials} />
         </CardContent>
       </Card>
+
+      <Pager page={page} hasMore={hasMore} basePath="/projects" params={{ q }} />
     </div>
   );
 }

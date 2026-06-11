@@ -4,12 +4,18 @@ import { getEffectivePermissions, getSessionProfile } from "@/lib/auth/permissio
 import { createClient } from "@/lib/supabase/server";
 import { can } from "@/lib/auth/permission-keys";
 import { PermissionDenied } from "@/components/permission-denied";
+import { LIST_PAGE_SIZE, Pager, parseListParams, SearchBox } from "@/components/list-controls";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ClientsTable } from "./clients-table";
 import { ClientFormDialog } from "./client-form";
 
-export default async function ClientsPage() {
+export default async function ClientsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; page?: string }>;
+}) {
+  const { q, page, from, to } = parseListParams(await searchParams);
   const session = await getSessionProfile();
   if (!session) redirect("/login");
 
@@ -21,10 +27,15 @@ export default async function ClientsPage() {
   const canEdit = can(perms, "clients.edit");
 
   const supabase = await createClient();
-  const { data: clients } = await supabase
+  let clientsQuery = supabase
     .from("clients")
     .select("id, name, company, phone, email, address, country, notes")
-    .order("name", { ascending: true });
+    .order("name", { ascending: true })
+    .range(from, to); // one extra row → hasMore
+  if (q) clientsQuery = clientsQuery.or(`name.ilike.%${q}%,company.ilike.%${q}%,phone.ilike.%${q}%`);
+  const { data: clientRows } = await clientsQuery;
+  const hasMore = (clientRows ?? []).length > LIST_PAGE_SIZE;
+  const clients = (clientRows ?? []).slice(0, LIST_PAGE_SIZE);
 
   return (
     <div className="space-y-6">
@@ -47,11 +58,15 @@ export default async function ClientsPage() {
         ) : null}
       </div>
 
+      <SearchBox placeholder="ابحث باسم العميل أو الجهة أو الجوال…" q={q} />
+
       <Card>
         <CardContent className="pt-6">
-          <ClientsTable clients={clients ?? []} canEdit={canEdit} />
+          <ClientsTable clients={clients} canEdit={canEdit} />
         </CardContent>
       </Card>
+
+      <Pager page={page} hasMore={hasMore} basePath="/clients" params={{ q }} />
     </div>
   );
 }

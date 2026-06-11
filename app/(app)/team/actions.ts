@@ -132,6 +132,9 @@ export async function createTeamMember(
       email,
       role,
       is_active: true,
+      // The manager hands over a TEMP password; the account must set its own
+      // on first login (C5 — enforced by the (app) layout gate).
+      must_change_password: true,
     });
     if (profileErr) {
       console.error("[team.create_member] profile insert failed", {
@@ -163,6 +166,51 @@ export async function createTeamMember(
     }
     return { error: "تعذّر إنشاء الحساب — خطأ غير متوقع. حاول مرة أخرى." };
   }
+}
+
+/**
+ * Manager resets a member's password to a generated TEMP one (Phase 4.5 C5):
+ * sets must_change_password so the member is forced to pick their own at next
+ * login, and returns the temp to the manager's screen ONCE (never logged).
+ */
+export async function resetMemberPassword(userId: string): Promise<ActionState> {
+  const session = await requireManager();
+  if (!session) return { error: "غير مصرّح." };
+  if (userId === session.userId) {
+    return { error: "استخدم صفحة تعيين كلمة المرور لحسابك أنت." };
+  }
+
+  // URL-safe random temp, ≥16 chars (well above the 12 minimum).
+  const temp = `Osos-${crypto.randomUUID().replace(/-/g, "").slice(0, 14)}`;
+
+  try {
+    const admin = createAdminClient();
+    const { error: pwErr } = await admin.auth.admin.updateUserById(userId, { password: temp });
+    if (pwErr) {
+      console.error("[team.reset_password] updateUserById failed", {
+        status: (pwErr as { status?: number }).status,
+        message: pwErr.message,
+      });
+      return { error: "تعذّر إعادة تعيين كلمة المرور." };
+    }
+    await admin.from("profiles").update({ must_change_password: true }).eq("id", userId);
+    await admin.from("audit_log").insert({
+      actor_id: session.userId,
+      action: "team.reset_password",
+      target_type: "profile",
+      target_id: userId,
+      metadata: {}, // never the password
+    });
+  } catch (err) {
+    console.error(
+      "[team.reset_password] unexpected failure:",
+      err instanceof Error ? err.message : String(err),
+    );
+    return { error: "تعذّر إعادة تعيين كلمة المرور — خطأ غير متوقع." };
+  }
+
+  revalidatePath("/team");
+  return { success: temp };
 }
 
 export async function setMemberRole(userId: string, role: Role): Promise<ActionState> {

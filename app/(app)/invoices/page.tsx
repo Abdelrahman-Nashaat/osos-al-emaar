@@ -12,6 +12,7 @@ import {
 } from "@/lib/finance/invoice";
 import { formatMoney } from "@/lib/projects/money";
 import { must } from "@/lib/supabase/fetch";
+import { LIST_PAGE_SIZE, Pager, parseListParams, SearchBox } from "@/components/list-controls";
 import { PermissionDenied } from "@/components/permission-denied";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -27,7 +28,7 @@ import { InvoiceFormDialog } from "./invoice-form";
 export default async function InvoicesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ filter?: string }>;
+  searchParams: Promise<{ filter?: string; q?: string; page?: string }>;
 }) {
   const session = await getSessionProfile();
   if (!session) redirect("/login");
@@ -35,18 +36,25 @@ export default async function InvoicesPage({
   const perms = await getEffectivePermissions();
   if (!can(perms, "financials.view")) return <PermissionDenied />;
 
-  const { filter: filterParam } = await searchParams;
-  const filter = parseInvoiceFilter(filterParam);
+  const sp = await searchParams;
+  const filter = parseInvoiceFilter(sp.filter);
+  const { q, page, from } = parseListParams(sp);
 
   const supabase = await createClient();
   // Load-bearing finance reads → throw to error.tsx instead of fake-empty (B4).
   const [rows, clientRows, projectRows] = await Promise.all([
     must(
       "invoices.list",
-      supabase
-        .from("invoices")
-        .select("id, invoice_number, client_id, project_id, total, amount_paid, status, due_date, currency")
-        .order("created_at", { ascending: false }),
+      q
+        ? supabase
+            .from("invoices")
+            .select("id, invoice_number, client_id, project_id, total, amount_paid, status, due_date, currency")
+            .ilike("invoice_number", `%${q}%`)
+            .order("created_at", { ascending: false })
+        : supabase
+            .from("invoices")
+            .select("id, invoice_number, client_id, project_id, total, amount_paid, status, due_date, currency")
+            .order("created_at", { ascending: false }),
     ),
     must("invoices.clients", supabase.from("clients").select("id, name").order("name")),
     must("invoices.projects", supabase.from("projects").select("id, name").order("name")),
@@ -86,10 +94,12 @@ export default async function InvoicesPage({
   const counts = Object.fromEntries(
     INVOICE_FILTERS.map((f) => [f, all.filter((i) => matches(i, f)).length]),
   ) as Record<InvoiceFilter, number>;
-  const invoices: InvoiceListItem[] = all.filter((i) => matches(i, filter));
+  const filtered: InvoiceListItem[] = all.filter((i) => matches(i, filter));
+  const hasMore = filtered.length > from + LIST_PAGE_SIZE;
+  const invoices: InvoiceListItem[] = filtered.slice(from, from + LIST_PAGE_SIZE);
 
-  // Collections aging — shown on the «متأخرة» filter over the outstanding invoices.
-  const aging = filter === "overdue" ? buildAging(invoices) : null;
+  // Collections aging — over the WHOLE overdue set (not just the visible page).
+  const aging = filter === "overdue" ? buildAging(filtered) : null;
 
   return (
     <div className="space-y-6">
@@ -113,6 +123,12 @@ export default async function InvoicesPage({
 
       <InvoiceFilters active={filter} counts={counts} />
 
+      <SearchBox
+        placeholder="ابحث برقم الفاتورة…"
+        q={q}
+        hidden={{ filter: filter === "all" ? undefined : filter }}
+      />
+
       {aging ? <AgingSummary aging={aging} /> : null}
 
       <Card>
@@ -120,6 +136,13 @@ export default async function InvoicesPage({
           <InvoicesTable invoices={invoices} />
         </CardContent>
       </Card>
+
+      <Pager
+        page={page}
+        hasMore={hasMore}
+        basePath="/invoices"
+        params={{ q, filter: filter === "all" ? undefined : filter }}
+      />
     </div>
   );
 }

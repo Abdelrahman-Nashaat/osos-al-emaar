@@ -16,8 +16,12 @@ const admin = createClient(url, service, {
 const ts = Date.now();
 const mgr = { email: `e2e-team-mgr-${ts}@example.com`, password: `Test!${ts}Mm`, name: "مدير الفريق" };
 // Staff created THROUGH THE UI by the manager (the real createTeamMember path).
+// Their first password is a TEMP one (must_change_password) — each picks a
+// final password at first login (Phase 4.5 C5).
 const newEng = { email: `e2e-team-eng-${ts}@example.com`, password: `Engineer!${ts}`, name: "مهندس جديد" };
 const newAcc = { email: `e2e-team-acc-${ts}@example.com`, password: `Account!${ts}`, name: "محاسب جديد" };
+const finalEng = `FinalEng!${ts}x`;
+const finalAcc = `FinalAcc!${ts}x`;
 
 let mgrId = "";
 
@@ -58,6 +62,19 @@ async function login(page: Page, email: string, password: string) {
   await page.getByLabel("البريد الإلكتروني").fill(email);
   await page.getByLabel("كلمة المرور").fill(password);
   await page.getByRole("button", { name: "تسجيل الدخول" }).click();
+  await page.waitForURL("**/dashboard");
+}
+
+/** First login with a temp password: completes the forced password change (C5). */
+async function firstLogin(page: Page, email: string, tempPassword: string, newPassword: string) {
+  await page.goto("/login");
+  await page.getByLabel("البريد الإلكتروني").fill(email);
+  await page.getByLabel("كلمة المرور").fill(tempPassword);
+  await page.getByRole("button", { name: "تسجيل الدخول" }).click();
+  await page.waitForURL("**/account/password");
+  await page.locator("#pw-new").fill(newPassword);
+  await page.locator("#pw-confirm").fill(newPassword);
+  await page.getByRole("button", { name: "حفظ كلمة المرور" }).click();
   await page.waitForURL("**/dashboard");
 }
 
@@ -104,21 +121,27 @@ test("manager creates an engineer + accountant through the UI; both are audited 
     .in("target_id", ids);
   expect((audits ?? []).length).toBe(2);
 
-  // The freshly created engineer can actually sign in.
+  // The freshly created engineer signs in with the TEMP password and is forced
+  // to set a final one (C5) before reaching the dashboard.
   await page.context().clearCookies();
-  await login(page, newEng.email, newEng.password);
+  await firstLogin(page, newEng.email, newEng.password, finalEng);
+  await expect(page).toHaveURL(/\/dashboard/);
+
+  // Same for the accountant (so the later tests can sign in directly).
+  await page.context().clearCookies();
+  await firstLogin(page, newAcc.email, newAcc.password, finalAcc);
   await expect(page).toHaveURL(/\/dashboard/);
 });
 
 test("a created engineer cannot reach Team or create staff", async ({ page }) => {
-  await login(page, newEng.email, newEng.password);
+  await login(page, newEng.email, finalEng);
   await expect(page.getByRole("link", { name: "الفريق" })).toHaveCount(0);
   await page.goto("/team");
   await expect(page.getByText("لا تملك صلاحية الوصول")).toBeVisible();
 });
 
 test("a created accountant cannot reach Team or create staff", async ({ page }) => {
-  await login(page, newAcc.email, newAcc.password);
+  await login(page, newAcc.email, finalAcc);
   await expect(page.getByRole("link", { name: "الفريق" })).toHaveCount(0);
   await page.goto("/team");
   await expect(page.getByText("لا تملك صلاحية الوصول")).toBeVisible();
