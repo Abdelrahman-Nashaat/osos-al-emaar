@@ -101,6 +101,7 @@ export type Database = {
           address: string | null
           company: string | null
           country: string
+          cr_number: string | null
           created_at: string
           created_by: string | null
           email: string | null
@@ -109,11 +110,13 @@ export type Database = {
           notes: string | null
           phone: string | null
           updated_at: string
+          vat_number: string | null
         }
         Insert: {
           address?: string | null
           company?: string | null
           country?: string
+          cr_number?: string | null
           created_at?: string
           created_by?: string | null
           email?: string | null
@@ -122,11 +125,13 @@ export type Database = {
           notes?: string | null
           phone?: string | null
           updated_at?: string
+          vat_number?: string | null
         }
         Update: {
           address?: string | null
           company?: string | null
           country?: string
+          cr_number?: string | null
           created_at?: string
           created_by?: string | null
           email?: string | null
@@ -135,6 +140,7 @@ export type Database = {
           notes?: string | null
           phone?: string | null
           updated_at?: string
+          vat_number?: string | null
         }
         Relationships: [
           {
@@ -1144,6 +1150,10 @@ export type Database = {
       }
       payment_reverse: {
         Args: { p_note?: string; p_payment: string }
+        Returns: undefined
+      }
+      project_set_progress: {
+        Args: { p_progress: number; p_project: string }
         Returns: undefined
       }
       storage_attachment_visible: { Args: { p_name: string }; Returns: boolean }

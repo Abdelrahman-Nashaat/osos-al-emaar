@@ -13,7 +13,11 @@ export const ALLOWED_EXTENSIONS = [
   "pdf", "png", "jpg", "jpeg", "webp", "heic",
   "dwg", "dxf", "zip", "rar",
   "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "csv",
+  // Voice notes (in-app recorder) + phone audio files engineers share from site.
+  "webm", "m4a", "mp4", "mp3", "wav", "ogg", "oga", "aac", "amr",
 ] as const;
+
+const AUDIO_EXTENSIONS = ["webm", "m4a", "mp4", "mp3", "wav", "ogg", "oga", "aac", "amr"];
 
 export function fileExtension(name: string): string {
   const m = /\.([A-Za-z0-9]{1,8})$/.exec(name.trim());
@@ -27,6 +31,13 @@ export function isAllowedFile(name: string): boolean {
 export function isImageAttachment(a: { mime_type: string | null; file_name: string }): boolean {
   if (a.mime_type?.startsWith("image/")) return true;
   return ["png", "jpg", "jpeg", "webp", "heic"].includes(fileExtension(a.file_name));
+}
+
+/** Voice notes / audio files get an inline player instead of a new-tab open. */
+export function isAudioAttachment(a: { mime_type: string | null; file_name: string }): boolean {
+  if (a.mime_type?.startsWith("audio/")) return true;
+  if (a.mime_type?.startsWith("video/")) return false;
+  return AUDIO_EXTENSIONS.includes(fileExtension(a.file_name));
 }
 
 /** «2.4 م.ب» / «320 ك.ب» — Latin digits per the house rule. */

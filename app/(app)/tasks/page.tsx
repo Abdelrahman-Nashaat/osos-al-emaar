@@ -10,6 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { TasksTable, type TaskListItem } from "./tasks-table";
 import { TaskFilters, parseFilter, TASK_FILTERS, type TaskFilter } from "./task-filters";
 import { TaskFormDialog } from "./task-form";
+import { isTaskOverdue } from "@/lib/tasks/status";
 
 export default async function TasksPage({
   searchParams,
@@ -48,6 +49,7 @@ export default async function TasksPage({
   const nameById = new Map((directory ?? []).map((p) => [p.id, p.full_name] as const));
   const projectName = new Map((projectRows ?? []).map((p) => [p.id, p.name] as const));
 
+  const now = new Date();
   const all = (rows ?? []).map((t) => ({
     id: t.id,
     title: t.title,
@@ -57,12 +59,17 @@ export default async function TasksPage({
     project_name: projectName.get(t.project_id) ?? null,
     assignee_name: t.current_assignee_id ? (nameById.get(t.current_assignee_id) ?? null) : null,
     is_mine: t.current_assignee_id === myId,
+    is_overdue: isTaskOverdue(t.due_at, t.status, now),
   }));
 
   const matches = (t: (typeof all)[number], f: TaskFilter): boolean => {
     switch (f) {
       case "mine":
         return t.is_mine;
+      case "submitted":
+        return t.status === "submitted";
+      case "overdue":
+        return t.is_overdue;
       case "urgent":
         return t.priority === "urgent";
       case "incomplete":

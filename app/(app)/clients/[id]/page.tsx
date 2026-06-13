@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { must } from "@/lib/supabase/fetch";
 import { formatMoney } from "@/lib/projects/money";
 import { formatDate, countryLabel } from "@/lib/format/date";
+import { PhoneLinks, EmailLink } from "@/lib/format/contact";
 import { isIssued, outstanding, INVOICE_STATUS_LABELS } from "@/lib/finance/invoice";
 import { PROJECT_STATUS_LABELS } from "@/lib/projects/status";
 import { PermissionDenied } from "@/components/permission-denied";
@@ -138,10 +139,12 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
           <CardTitle className="text-base">بيانات التواصل</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <Field label="الجوال" value={client.phone ?? "—"} ltr />
-          <Field label="البريد" value={client.email ?? "—"} ltr />
+          <Field label="الجوال" value={<PhoneLinks phone={client.phone} />} />
+          <Field label="البريد" value={<EmailLink email={client.email} />} />
           <Field label="الدولة" value={countryLabel(client.country)} />
           <Field label="العنوان" value={client.address ?? "—"} />
+          {client.vat_number ? <Field label="الرقم الضريبي" value={client.vat_number} ltr /> : null}
+          {client.cr_number ? <Field label="السجل التجاري" value={client.cr_number} ltr /> : null}
           {client.notes ? (
             <div className="space-y-1 sm:col-span-2 lg:col-span-3">
               <p className="text-xs text-muted-foreground">ملاحظات</p>

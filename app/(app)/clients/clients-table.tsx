@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Pencil, Trash2 } from "lucide-react";
 import { deleteClient } from "./actions";
 import { ClientFormDialog, type ClientRow } from "./client-form";
+import { PhoneLinks } from "@/lib/format/contact";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -65,8 +66,8 @@ export function ClientsTable({
                   </Link>
                 </TableCell>
                 <TableCell className="text-muted-foreground">{c.company ?? "—"}</TableCell>
-                <TableCell dir="ltr" className="text-end text-muted-foreground">
-                  {c.phone ?? "—"}
+                <TableCell className="text-muted-foreground">
+                  <PhoneLinks phone={c.phone} />
                 </TableCell>
                 <TableCell className="text-muted-foreground">{c.address ?? "—"}</TableCell>
                 {canEdit ? (
@@ -92,8 +93,8 @@ export function ClientsTable({
             </div>
             {c.company ? <div className="text-sm text-muted-foreground">{c.company}</div> : null}
             {c.phone ? (
-              <div dir="ltr" className="text-end text-sm text-muted-foreground">
-                {c.phone}
+              <div className="text-sm text-muted-foreground">
+                <PhoneLinks phone={c.phone} />
               </div>
             ) : null}
             {c.address ? <div className="text-sm text-muted-foreground">{c.address}</div> : null}

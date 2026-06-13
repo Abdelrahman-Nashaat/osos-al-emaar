@@ -16,6 +16,8 @@ const clientSchema = z.object({
   email: z.email().max(200).optional(),
   address: z.string().trim().max(400).optional(),
   country: z.string().trim().max(60).optional(),
+  vat_number: z.string().trim().max(20).optional(),
+  cr_number: z.string().trim().max(20).optional(),
   notes: z.string().trim().max(2000).optional(),
 });
 
@@ -46,12 +48,15 @@ export async function saveClient(formData: FormData): Promise<ActionState> {
     email: field(formData.get("email")),
     address: field(formData.get("address")),
     country: field(formData.get("country")),
+    vat_number: field(formData.get("vat_number")),
+    cr_number: field(formData.get("cr_number")),
     notes: field(formData.get("notes")),
   });
   if (!parsed.success) {
     return { error: "تحقق من الحقول: الاسم مطلوب (حرفان على الأقل) وبريد صحيح إن وُجد." };
   }
-  const { id, name, company, phone, email, address, country, notes } = parsed.data;
+  const { id, name, company, phone, email, address, country, vat_number, cr_number, notes } =
+    parsed.data;
 
   const supabase = await createClient();
   const row = {
@@ -61,6 +66,8 @@ export async function saveClient(formData: FormData): Promise<ActionState> {
     email: email ?? null,
     address: address ?? null,
     country: country ?? "SA",
+    vat_number: vat_number ?? null,
+    cr_number: cr_number ?? null,
     notes: notes ?? null,
   };
 

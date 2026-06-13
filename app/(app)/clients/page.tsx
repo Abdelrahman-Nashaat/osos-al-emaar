@@ -29,7 +29,7 @@ export default async function ClientsPage({
   const supabase = await createClient();
   let clientsQuery = supabase
     .from("clients")
-    .select("id, name, company, phone, email, address, country, notes")
+    .select("id, name, company, phone, email, address, country, vat_number, cr_number, notes")
     .order("name", { ascending: true })
     .range(from, to); // one extra row → hasMore
   if (q) clientsQuery = clientsQuery.or(`name.ilike.%${q}%,company.ilike.%${q}%,phone.ilike.%${q}%`);

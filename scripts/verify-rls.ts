@@ -36,6 +36,8 @@ async function main() {
   const engEmail = `rls-eng-${ts}@example.com`;
   const password = `Test!${ts}aA`;
   let engId = "";
+  let tmpClientId = "";
+  let tmpProjectId = "";
 
   try {
     const { data: created, error } = await admin.auth.admin.createUser({
@@ -87,7 +89,50 @@ async function main() {
     // Engineer cannot read the audit log (manager only).
     const { data: audit } = await eng.from("audit_log").select("id").limit(1);
     assert((audit?.length ?? 0) === 0, "engineer SELECT audit_log returns 0 rows");
+
+    // ── project_set_progress authority (migration 0025) ──
+    const { data: cl } = await admin
+      .from("clients")
+      .insert({ name: `RLS Temp Client ${ts}` })
+      .select("id")
+      .single();
+    tmpClientId = cl?.id ?? "";
+    const { data: pr } = await admin
+      .from("projects")
+      .insert({ name: `RLS Temp Project ${ts}`, client_id: tmpClientId, progress: 10 })
+      .select("id")
+      .single();
+    tmpProjectId = pr?.id ?? "";
+
+    // Non-member engineer cannot move the progress.
+    const { error: progDenied } = await eng.rpc("project_set_progress", {
+      p_project: tmpProjectId,
+      p_progress: 80,
+    });
+    assert(!!progDenied, "non-member engineer project_set_progress is DENIED (not_authorized)");
+    const { data: afterDeny } = await admin
+      .from("projects")
+      .select("progress")
+      .eq("id", tmpProjectId)
+      .single();
+    assert(afterDeny?.progress === 10, "denied call did NOT change progress");
+
+    // Once added as a member, the engineer CAN move the progress.
+    await admin.from("project_members").insert({ user_id: engId, project_id: tmpProjectId });
+    const { error: progOk } = await eng.rpc("project_set_progress", {
+      p_project: tmpProjectId,
+      p_progress: 65,
+    });
+    assert(!progOk, "member engineer project_set_progress SUCCEEDS");
+    const { data: afterOk } = await admin
+      .from("projects")
+      .select("progress")
+      .eq("id", tmpProjectId)
+      .single();
+    assert(afterOk?.progress === 65, "member call updated progress to 65");
   } finally {
+    if (tmpProjectId) await admin.from("projects").delete().eq("id", tmpProjectId);
+    if (tmpClientId) await admin.from("clients").delete().eq("id", tmpClientId);
     if (engId) {
       await admin.from("profiles").delete().eq("id", engId);
       await admin.auth.admin.deleteUser(engId);

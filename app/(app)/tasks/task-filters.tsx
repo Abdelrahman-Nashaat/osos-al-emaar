@@ -1,12 +1,22 @@
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
-export const TASK_FILTERS = ["all", "mine", "urgent", "incomplete", "completed"] as const;
+export const TASK_FILTERS = [
+  "all",
+  "mine",
+  "submitted",
+  "overdue",
+  "urgent",
+  "incomplete",
+  "completed",
+] as const;
 export type TaskFilter = (typeof TASK_FILTERS)[number];
 
 const LABELS: Record<TaskFilter, string> = {
   all: "الكل",
   mine: "مهامي",
+  submitted: "بانتظار المراجعة",
+  overdue: "متأخرة",
   urgent: "عاجلة",
   incomplete: "غير مكتملة",
   completed: "مكتملة",

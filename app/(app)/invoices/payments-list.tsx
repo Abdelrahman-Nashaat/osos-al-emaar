@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Undo2 } from "lucide-react";
+import Link from "next/link";
+import { ReceiptText, Undo2 } from "lucide-react";
 import { useActionResult } from "@/components/use-action-result";
 import { reversePayment } from "./actions";
 import { PAYMENT_METHOD_LABELS, type PaymentMethod } from "@/lib/finance/invoice";
@@ -87,6 +88,16 @@ export function PaymentsList({
                 </span>
               ) : null}
               {p.recorded_by_name ? <span>{p.recorded_by_name}</span> : null}
+              {!p.is_reversed ? (
+                <Link
+                  href={`/invoices/${invoiceId}/receipt/${p.id}`}
+                  className="inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-xs hover:bg-muted hover:text-foreground"
+                  title="طباعة سند قبض"
+                >
+                  <ReceiptText className="size-3.5" />
+                  سند قبض
+                </Link>
+              ) : null}
               {canReverse && !p.is_reversed ? (
                 <ReverseDialog paymentId={p.id} invoiceId={invoiceId} projectId={projectId} />
               ) : null}

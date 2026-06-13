@@ -35,6 +35,8 @@ export function InvoicePrintDocument({
   invoice,
   clientName,
   clientAddress,
+  clientVatNumber,
+  clientCrNumber,
   projectName,
   payments,
   qrDataUrl,
@@ -43,11 +45,21 @@ export function InvoicePrintDocument({
   invoice: PrintInvoice;
   clientName: string;
   clientAddress: string | null;
+  clientVatNumber?: string | null;
+  clientCrNumber?: string | null;
   projectName: string;
   payments: PrintPayment[];
   qrDataUrl: string | null;
 }) {
+  // A VAT-registered buyer turns a simplified invoice into a standard tax
+  // invoice with a buyer block — what a B2B client's accountant requires.
+  const buyerIsTaxRegistered = Boolean(clientVatNumber);
   const isTax = Boolean(office.vat_number);
+  const heading = isTax
+    ? buyerIsTaxRegistered
+      ? "فاتورة ضريبية"
+      : "فاتورة ضريبية مبسطة"
+    : "فاتورة";
   const due = Math.max(0, Math.round((invoice.total - invoice.amount_paid) * 100) / 100);
   const activePayments = payments.filter((p) => !p.is_reversed);
 
@@ -58,7 +70,7 @@ export function InvoicePrintDocument({
 
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-2xl font-bold">{isTax ? "فاتورة ضريبية مبسطة" : "فاتورة"}</h1>
+            <h1 className="text-2xl font-bold">{heading}</h1>
             <p className="text-sm text-neutral-700" dir="ltr">
               {invoice.invoice_number}
             </p>
@@ -74,6 +86,18 @@ export function InvoicePrintDocument({
             <span className="font-bold">العميل/</span> {clientName}
           </p>
           {clientAddress ? <p>{clientAddress}</p> : null}
+          {clientVatNumber ? (
+            <p>
+              <span className="font-bold">الرقم الضريبي للعميل/</span>{" "}
+              <span dir="ltr">{clientVatNumber}</span>
+            </p>
+          ) : null}
+          {clientCrNumber ? (
+            <p>
+              <span className="font-bold">السجل التجاري/</span>{" "}
+              <span dir="ltr">{clientCrNumber}</span>
+            </p>
+          ) : null}
           <p>
             <span className="font-bold">المشروع/</span> {projectName}
           </p>
@@ -88,7 +112,9 @@ export function InvoicePrintDocument({
           </thead>
           <tbody>
             <tr className="border-b border-neutral-300 align-top">
-              <td className="py-3">{invoice.description?.trim() || `أتعاب خدمات هندسية — ${projectName}`}</td>
+              <td className="py-3 whitespace-pre-wrap">
+                {invoice.description?.trim() || `أتعاب خدمات هندسية — ${projectName}`}
+              </td>
               <td className="py-3 text-end" dir="ltr">
                 {formatMoney(invoice.subtotal, invoice.currency)}
               </td>

@@ -147,8 +147,8 @@ async function TaskWidgets({ userId, isManager }: { userId: string; isManager: b
 
   const stats = isManager
     ? [
-        { label: "بانتظار المراجعة", value: submitted, href: "/tasks?filter=incomplete" },
-        { label: "مهام متأخرة", value: overdueAll, href: "/tasks?filter=incomplete", danger: true },
+        { label: "بانتظار المراجعة", value: submitted, href: "/tasks?filter=submitted" },
+        { label: "مهام متأخرة", value: overdueAll, href: "/tasks?filter=overdue", danger: true },
         { label: "مهام عاجلة", value: urgentOpen, href: "/tasks?filter=urgent" },
       ]
     : [

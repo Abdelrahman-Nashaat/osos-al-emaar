@@ -55,7 +55,11 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
     office,
     attachments,
   ] = await Promise.all([
-    supabase.from("clients").select("id, name, address").eq("id", invoice.client_id).maybeSingle(),
+    supabase
+      .from("clients")
+      .select("id, name, address, vat_number, cr_number")
+      .eq("id", invoice.client_id)
+      .maybeSingle(),
     supabase.from("projects").select("id, name").eq("id", invoice.project_id).maybeSingle(),
     supabase
       .from("payments")
@@ -256,6 +260,8 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
         invoice={invoice}
         clientName={client?.name ?? "—"}
         clientAddress={client?.address ?? null}
+        clientVatNumber={client?.vat_number ?? null}
+        clientCrNumber={client?.cr_number ?? null}
         projectName={project?.name ?? "—"}
         payments={paymentRows.map((p) => ({
           id: p.id,

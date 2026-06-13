@@ -25,6 +25,8 @@ export type ClientRow = {
   email: string | null;
   address: string | null;
   country: string | null;
+  vat_number: string | null;
+  cr_number: string | null;
   notes: string | null;
 };
 
@@ -79,6 +81,27 @@ export function ClientFormDialog({
           <div className="space-y-2 sm:col-span-2">
             <Label htmlFor="c-address">العنوان / الموقع</Label>
             <Input id="c-address" name="address" defaultValue={client?.address ?? ""} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="c-vat">الرقم الضريبي (للعملاء المسجّلين)</Label>
+            <Input
+              id="c-vat"
+              name="vat_number"
+              dir="ltr"
+              inputMode="numeric"
+              placeholder="300000000000003"
+              defaultValue={client?.vat_number ?? ""}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="c-cr">السجل التجاري</Label>
+            <Input
+              id="c-cr"
+              name="cr_number"
+              dir="ltr"
+              inputMode="numeric"
+              defaultValue={client?.cr_number ?? ""}
+            />
           </div>
           <div className="space-y-2 sm:col-span-2">
             <Label htmlFor="c-notes">ملاحظات</Label>

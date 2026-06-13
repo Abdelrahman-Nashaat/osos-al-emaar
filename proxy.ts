@@ -32,6 +32,9 @@ export async function proxy(request: NextRequest) {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self'",
+    // media-src: voice notes play from a recording blob: preview and from a
+    // signed Supabase Storage URL; both are blocked by the default-src fallback.
+    `media-src 'self' blob: ${NEXT_PUBLIC_SUPABASE_URL}`,
     `connect-src 'self' ${NEXT_PUBLIC_SUPABASE_URL} ${supabaseWss}`,
     "worker-src 'self'",
     "object-src 'none'",

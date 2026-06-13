@@ -278,3 +278,35 @@ export async function removeProjectMember(projectId: string, userId: string): Pr
   revalidatePath(`/projects/${projectId}`);
   return { success: "تمت إزالة العضو." };
 }
+
+/**
+ * Update only the project completion % — for assigned engineers who know the
+ * real status but should NOT get full projects.edit. Authority + audit live in
+ * the project_set_progress SECURITY DEFINER fn (migration 0025); this action
+ * just authenticates the session and forwards the clamped value.
+ */
+export async function setProjectProgress(
+  projectId: string,
+  progress: number,
+): Promise<ActionState> {
+  const session = await getSessionProfile();
+  if (!session) return { error: "غير مصرّح." };
+  if (!isUuid(projectId)) return { error: "مدخل غير صالح." };
+  const value = Math.max(0, Math.min(100, Math.round(Number(progress) || 0)));
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("project_set_progress", {
+    p_project: projectId,
+    p_progress: value,
+  });
+  if (error) {
+    return {
+      error: /not_authorized/.test(error.message)
+        ? "تحديث نسبة الإنجاز متاح لأعضاء المشروع أو من يملك صلاحية تعديل المشاريع."
+        : "تعذّر تحديث نسبة الإنجاز.",
+    };
+  }
+  revalidatePath(`/projects/${projectId}`);
+  revalidatePath("/projects");
+  return { success: `تم تحديث نسبة الإنجاز إلى ${value}%.` };
+}

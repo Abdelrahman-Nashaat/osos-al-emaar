@@ -7,6 +7,7 @@ import {
   isInvoiceOverdue,
   outstanding,
   agingBucket,
+  daysOverdue,
   AGING_LABELS,
   type AgingBucket,
 } from "@/lib/finance/invoice";
@@ -17,6 +18,7 @@ import { PermissionDenied } from "@/components/permission-denied";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { InvoicesTable, type InvoiceListItem } from "./invoices-table";
+import { CollectionsWorklist, type CollectionRow } from "./collections-worklist";
 import {
   InvoiceFilters,
   parseInvoiceFilter,
@@ -56,15 +58,18 @@ export default async function InvoicesPage({
             .select("id, invoice_number, client_id, project_id, total, amount_paid, status, due_date, currency")
             .order("created_at", { ascending: false }),
     ),
-    must("invoices.clients", supabase.from("clients").select("id, name").order("name")),
+    must("invoices.clients", supabase.from("clients").select("id, name, phone").order("name")),
     must("invoices.projects", supabase.from("projects").select("id, name").order("name")),
   ]);
   const clientName = new Map(clientRows.map((c) => [c.id, c.name] as const));
+  const clientPhone = new Map(clientRows.map((c) => [c.id, c.phone] as const));
   const projectName = new Map(projectRows.map((p) => [p.id, p.name] as const));
 
   const all = rows.map((inv) => ({
     id: inv.id,
     invoice_number: inv.invoice_number,
+    client_id: inv.client_id,
+    project_id: inv.project_id,
     client_name: clientName.get(inv.client_id) ?? null,
     project_name: projectName.get(inv.project_id) ?? null,
     total: inv.total,
@@ -101,6 +106,52 @@ export default async function InvoicesPage({
   // Collections aging — over the WHOLE overdue set (not just the visible page).
   const aging = filter === "overdue" ? buildAging(filtered) : null;
 
+  // Collections worklist (التحصيل) — built only on the overdue filter. Oldest
+  // debt first, with each invoice's latest follow-up note and the client phone.
+  let collectionRows: CollectionRow[] = [];
+  let noDueDate: { id: string; invoice_number: string }[] = [];
+  if (filter === "overdue") {
+    const overdueInvoices = all.filter((i) => matches(i, "overdue"));
+    const overdueIds = overdueInvoices.map((i) => i.id);
+    const lastNoteByInvoice = new Map<string, { date: string; note: string }>();
+    if (overdueIds.length > 0) {
+      const { data: noteEvents } = await supabase
+        .from("invoice_events")
+        .select("invoice_id, note, created_at")
+        .in("invoice_id", overdueIds)
+        .eq("event_type", "note")
+        .order("created_at", { ascending: false });
+      for (const e of noteEvents ?? []) {
+        if (!lastNoteByInvoice.has(e.invoice_id) && e.note) {
+          lastNoteByInvoice.set(e.invoice_id, { date: e.created_at, note: e.note });
+        }
+      }
+    }
+    collectionRows = overdueInvoices
+      .slice()
+      .sort((a, b) => (a.due_date ?? "").localeCompare(b.due_date ?? "")) // oldest debt first
+      .map((inv) => ({
+        id: inv.id,
+        invoice_number: inv.invoice_number,
+        project_id: inv.project_id,
+        client_name: inv.client_name,
+        client_phone: clientPhone.get(inv.client_id) ?? null,
+        outstanding: outstanding(inv.total, inv.amount_paid),
+        currency: inv.currency,
+        due_date: inv.due_date,
+        days_overdue: daysOverdue(inv.due_date),
+        aging_label: AGING_LABELS[agingBucket(inv.due_date)],
+        last_follow_up: lastNoteByInvoice.get(inv.id) ?? null,
+      }));
+    // Sent / partially-paid invoices with NO due date silently escape overdue
+    // detection — surface them so the accountant can set a due date.
+    noDueDate = all
+      .filter(
+        (i) => !i.due_date && (i.status === "sent" || i.status === "partially_paid"),
+      )
+      .map((i) => ({ id: i.id, invoice_number: i.invoice_number }));
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3">
@@ -131,18 +182,24 @@ export default async function InvoicesPage({
 
       {aging ? <AgingSummary aging={aging} /> : null}
 
-      <Card>
-        <CardContent className="pt-6">
-          <InvoicesTable invoices={invoices} />
-        </CardContent>
-      </Card>
+      {filter === "overdue" ? (
+        <CollectionsWorklist rows={collectionRows} noDueDate={noDueDate} />
+      ) : (
+        <>
+          <Card>
+            <CardContent className="pt-6">
+              <InvoicesTable invoices={invoices} />
+            </CardContent>
+          </Card>
 
-      <Pager
-        page={page}
-        hasMore={hasMore}
-        basePath="/invoices"
-        params={{ q, filter: filter === "all" ? undefined : filter }}
-      />
+          <Pager
+            page={page}
+            hasMore={hasMore}
+            basePath="/invoices"
+            params={{ q, filter: filter === "all" ? undefined : filter }}
+          />
+        </>
+      )}
     </div>
   );
 }

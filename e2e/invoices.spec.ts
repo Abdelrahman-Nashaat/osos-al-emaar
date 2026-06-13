@@ -365,7 +365,8 @@ test("manager UI: records a payment and an overdue invoice shows red", async ({ 
   await expect(page.getByRole("link", { name: "الفواتير" }).first()).toBeVisible();
 
   await page.goto("/invoices?filter=overdue");
-  await expect(page.getByText("(متأخرة)").first()).toBeVisible();
+  // The overdue filter now renders the collections worklist (التحصيل).
+  await expect(page.getByText("قائمة التحصيل").first()).toBeVisible();
 
   await page.goto(`/invoices/${invId}`);
   await page.getByRole("button", { name: "تسجيل دفعة" }).click();

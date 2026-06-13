@@ -70,8 +70,8 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
 export const VAT_RATES = [0, 15] as const;
 export type VatRate = (typeof VAT_RATES)[number];
 export const VAT_RATE_LABELS: Record<VatRate, string> = {
-  0: "بدون ضريبة (٠٪)",
-  15: "ضريبة القيمة المضافة ١٥٪",
+  0: "بدون ضريبة (0%)",
+  15: "ضريبة القيمة المضافة 15%",
 };
 
 export const INVOICE_EVENT_LABELS: Record<InvoiceEventType, string> = {
@@ -140,10 +140,22 @@ export function agingBucket(
 
 export const AGING_LABELS: Record<AgingBucket, string> = {
   current: "غير مستحقة",
-  d1_30: "متأخرة ١–٣٠ يوم",
-  d31_60: "متأخرة ٣١–٦٠ يوم",
-  d60_plus: "متأخرة أكثر من ٦٠ يوم",
+  d1_30: "متأخرة 1–30 يوماً",
+  d31_60: "متأخرة 31–60 يوماً",
+  d60_plus: "متأخرة أكثر من 60 يوماً",
 };
+
+/** Whole days past the due date (0 if not overdue or no due date). */
+export function daysOverdue(
+  dueDate: string | null | undefined,
+  today: Date = new Date(),
+): number {
+  if (!dueDate) return 0;
+  const due = new Date(`${dueDate.slice(0, 10)}T00:00:00`);
+  const now = new Date(`${toISODate(today)}T00:00:00`);
+  const days = Math.floor((now.getTime() - due.getTime()) / 86_400_000);
+  return days > 0 ? days : 0;
+}
 
 export type InvoiceAction = "send" | "record_payment" | "edit" | "note" | "void" | "delete";
 

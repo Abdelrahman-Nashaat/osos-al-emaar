@@ -13,11 +13,28 @@ import {
   isIssued,
   outstanding,
   agingBucket,
+  daysOverdue,
   nextInvoiceActions,
 } from "./invoice";
 
 // Fixed "today" (noon UTC keeps the local Y-M-D stable across real timezones).
 const NOW = new Date("2026-06-08T12:00:00Z");
+
+describe("daysOverdue", () => {
+  it("counts whole days past the due date", () => {
+    expect(daysOverdue("2026-06-01", NOW)).toBe(7);
+  });
+  it("is 0 for a future due date", () => {
+    expect(daysOverdue("2026-07-01", NOW)).toBe(0);
+  });
+  it("is 0 for today", () => {
+    expect(daysOverdue("2026-06-08", NOW)).toBe(0);
+  });
+  it("is 0 when there is no due date", () => {
+    expect(daysOverdue(null, NOW)).toBe(0);
+    expect(daysOverdue(undefined, NOW)).toBe(0);
+  });
+});
 
 describe("isInvoiceOverdue", () => {
   it("is overdue when due date is past and still awaiting collection", () => {

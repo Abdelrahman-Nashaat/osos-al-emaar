@@ -1,12 +1,14 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { Download, FileText, Image as ImageIcon, Loader2, Paperclip, Trash2, Upload } from "lucide-react";
+import { AudioLines, Download, FileText, Image as ImageIcon, Loader2, Paperclip, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { uploadAttachment, deleteAttachment, getAttachmentUrl } from "@/app/(app)/attachments/actions";
 import { useActionResult } from "@/components/use-action-result";
+import { VoiceNoteRecorder } from "@/components/voice-note-recorder";
 import {
   formatFileSize,
+  isAudioAttachment,
   isImageAttachment,
   type AttachmentEntity,
 } from "@/lib/attachments/shared";
@@ -40,6 +42,7 @@ export function AttachmentsCard({
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, startUpload] = useTransition();
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [playing, setPlaying] = useState<{ id: string; url: string } | null>(null);
   const handle = useActionResult();
 
   const onPick = (f: File | null | undefined) => {
@@ -66,6 +69,23 @@ export function AttachmentsCard({
     });
   };
 
+  /** Audio plays inline (signed URL into <audio>) instead of a new tab. */
+  const play = (id: string) => {
+    if (playing?.id === id) {
+      setPlaying(null);
+      return;
+    }
+    setBusyId(id);
+    void getAttachmentUrl(id).then((res) => {
+      setBusyId(null);
+      if (res.error || !res.url) {
+        toast.error(res.error ?? "تعذّر تشغيل التسجيل.");
+        return;
+      }
+      setPlaying({ id, url: res.url });
+    });
+  };
+
   return (
     <Card className="no-print">
       <CardHeader className="flex flex-row items-center justify-between">
@@ -77,7 +97,8 @@ export function AttachmentsCard({
           ) : null}
         </CardTitle>
         {canUpload ? (
-          <div>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <VoiceNoteRecorder uploading={uploading} onSubmit={onPick} />
             <input
               ref={fileRef}
               type="file"
@@ -111,15 +132,17 @@ export function AttachmentsCard({
         ) : (
           <ul className="divide-y divide-border">
             {items.map((a) => {
-              const Icon = isImageAttachment(a) ? ImageIcon : FileText;
+              const audio = isAudioAttachment(a);
+              const Icon = audio ? AudioLines : isImageAttachment(a) ? ImageIcon : FileText;
               const canDelete = isManager || a.uploaded_by === currentUserId;
               return (
-                <li key={a.id} className="flex min-w-0 items-center gap-3 py-2.5">
+                <li key={a.id} className="min-w-0 py-2.5">
+                  <div className="flex min-w-0 items-center gap-3">
                   <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
                   <div className="min-w-0 flex-1">
                     <button
                       type="button"
-                      onClick={() => open(a.id)}
+                      onClick={() => (audio ? play(a.id) : open(a.id))}
                       className="block max-w-full truncate text-start text-sm font-medium hover:underline"
                       dir="auto"
                     >
@@ -135,12 +158,14 @@ export function AttachmentsCard({
                     variant="ghost"
                     size="icon"
                     className="size-9"
-                    aria-label={`تنزيل ${a.file_name}`}
+                    aria-label={audio ? `تشغيل ${a.file_name}` : `تنزيل ${a.file_name}`}
                     disabled={busyId === a.id}
-                    onClick={() => open(a.id)}
+                    onClick={() => (audio ? play(a.id) : open(a.id))}
                   >
                     {busyId === a.id ? (
                       <Loader2 className="size-4 animate-spin" />
+                    ) : audio ? (
+                      <AudioLines className="size-4" />
                     ) : (
                       <Download className="size-4" />
                     )}
@@ -162,6 +187,16 @@ export function AttachmentsCard({
                     >
                       <Trash2 className="size-4" />
                     </Button>
+                  ) : null}
+                  </div>
+                  {audio && playing?.id === a.id ? (
+                    <audio
+                      src={playing.url}
+                      controls
+                      autoPlay
+                      preload="metadata"
+                      className="mt-2 h-9 w-full"
+                    />
                   ) : null}
                 </li>
               );

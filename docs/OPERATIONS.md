@@ -30,6 +30,10 @@ whichever happens first:
   export writes an `export.run` audit row.
 - **Cadence:** after every working day with data changes, and **always before
   applying a migration** to the live database (gate runbook step 10).
+- **Verified JSON snapshot (scripted):** `npm run backup:snapshot` writes
+  `.backups/snapshot-<date>.json` (every business table + auth-user metadata, no
+  password hashes) and **re-reads the file to verify row counts** match the live
+  DB. `.backups/` is gitignored. Use this as the pre-migration backup.
 - **Manual dump (schema + data, full fidelity):**
   `npx supabase db dump --db-url "$SUPABASE_DB_URL" -f backup-$(date +%F).sql`
   (connection string from Dashboard → Settings → Database; never commit it).
@@ -56,6 +60,31 @@ where pubname = 'supabase_realtime'
 
 `audit_log` counts as financial: its `metadata` embeds invoice/payment amounts.
 `offers`/`offer_events` are financial (quotation amounts) — never publish them.
+
+## Daily reminders (pg_cron — migration 0026)
+
+A pg_cron job `daily-reminders` runs `public.run_daily_reminders()` at **05:00
+UTC (08:00 Asia/Riyadh)** every day. It inserts in-app notifications (the same
+bell + Realtime stream) for: invoices that crossed their due date (manager +
+accountant only), tasks due today / newly overdue (assignee, + managers for
+overdue), and offers past `valid_until` still `sent` (managers). Each reminder
+fires **at most once per entity** (deduped by `type` + `href`), so the bell
+never repeats the same item. Financial isolation holds — task reminders carry
+no amounts; invoice/offer reminders never reach engineers. `EXECUTE` on the
+function is revoked from `anon`/`authenticated` (only the scheduler runs it).
+
+```sql
+-- Inspect / verify the schedule:
+select jobid, jobname, schedule, active from cron.job where jobname = 'daily-reminders';
+-- Manually trigger a run (service role / SQL editor) if needed:
+select public.run_daily_reminders();
+```
+
+## Demo environment
+
+A fully isolated demo (separate Supabase + Vercel project) is provisioned and
+seeded per `docs/DEMO_ENVIRONMENT.md`. The seed (`scripts/demo/`) refuses to run
+against the clean/production project ref. Never point `seed:demo` at the live DB.
 
 ## Storage («المرفقات» + portfolio images)
 

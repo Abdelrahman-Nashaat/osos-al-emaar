@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { can } from "@/lib/auth/permission-keys";
 import { isOverdue } from "@/lib/projects/status";
 import { formatDate } from "@/lib/format/date";
+import { PhoneLinks, EmailLink } from "@/lib/format/contact";
 import { fetchAttachments } from "@/lib/attachments/list";
 import { cn } from "@/lib/utils";
 import { PermissionDenied } from "@/components/permission-denied";
@@ -13,7 +14,7 @@ import { AttachmentsCard } from "@/components/attachments-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "../status-badge";
-import { ProgressBar } from "../progress-bar";
+import { ProgressEditor } from "../progress-editor";
 import { ProjectFormDialog } from "../project-form";
 import { ProjectMembersEditor } from "../project-members-editor";
 import { ProjectFinancialsCard } from "../project-financials-card";
@@ -77,6 +78,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     .select("user_id")
     .eq("project_id", id);
   const memberIds = (memberRows ?? []).map((m) => m.user_id);
+  const isMember = memberIds.includes(session.userId);
 
   // Project tasks — operational, shown to anyone with tasks.view (no amounts).
   let taskRows: {
@@ -234,7 +236,11 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1 sm:col-span-2">
             <div className="text-xs text-muted-foreground">نسبة الإنجاز</div>
-            <ProgressBar value={project.progress} />
+            <ProgressEditor
+              projectId={project.id}
+              value={project.progress}
+              canEdit={canEdit || isMember}
+            />
           </div>
           <Field label="تاريخ البدء" value={formatDate(project.start_date)} />
           <div className="space-y-1">
@@ -267,8 +273,18 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           <CardContent className="grid gap-4 sm:grid-cols-2">
             <Field label="الاسم" value={client.name} />
             {client.company ? <Field label="الجهة" value={client.company} /> : null}
-            {client.phone ? <Field label="الجوال" value={client.phone} ltr /> : null}
-            {client.email ? <Field label="البريد" value={client.email} ltr /> : null}
+            {client.phone ? (
+              <div className="space-y-1">
+                <div className="text-xs text-muted-foreground">الجوال</div>
+                <PhoneLinks phone={client.phone} />
+              </div>
+            ) : null}
+            {client.email ? (
+              <div className="space-y-1">
+                <div className="text-xs text-muted-foreground">البريد</div>
+                <EmailLink email={client.email} />
+              </div>
+            ) : null}
             {client.address ? <Field label="العنوان" value={client.address} /> : null}
             {client.notes ? (
               <div className="space-y-1 sm:col-span-2">
