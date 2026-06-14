@@ -97,6 +97,7 @@ export function OfferFormDialog({
               <>
                 <input type="hidden" name="client_id" value={offer.client_id} />
                 <Input
+                  id="o-client"
                   value={clients.find((c) => c.id === offer.client_id)?.name ?? ""}
                   disabled
                   readOnly

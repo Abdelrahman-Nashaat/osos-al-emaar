@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { Plus } from "lucide-react";
 import { getEffectivePermissions, getSessionProfile } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { must } from "@/lib/supabase/fetch";
 import { can } from "@/lib/auth/permission-keys";
 import { PermissionDenied } from "@/components/permission-denied";
 import { LIST_PAGE_SIZE, Pager, parseListParams, SearchBox } from "@/components/list-controls";
@@ -32,9 +33,9 @@ export default async function ProjectsPage({
     .order("created_at", { ascending: false })
     .range(from, to); // one extra row → hasMore
   if (q) projectsQuery = projectsQuery.or(`name.ilike.%${q}%,code.ilike.%${q}%`);
-  const { data: projectRows } = await projectsQuery;
-  const hasMore = (projectRows ?? []).length > LIST_PAGE_SIZE;
-  const projects = (projectRows ?? []).slice(0, LIST_PAGE_SIZE);
+  const projectRows = await must("projects.list", projectsQuery);
+  const hasMore = projectRows.length > LIST_PAGE_SIZE;
+  const projects = projectRows.slice(0, LIST_PAGE_SIZE);
 
   // Client names (engineers may read these via projects.view RLS — operational only).
   const { data: allClients } = await supabase.from("clients").select("id, name").order("name");
@@ -44,10 +45,11 @@ export default async function ProjectsPage({
   // Budgets are fetched ONLY for financial viewers — engineers never receive amounts.
   const budgetByProject = new Map<string, { budget: number | null; currency: string }>();
   if (showFinancials) {
-    const { data: fin } = await supabase
-      .from("project_financials")
-      .select("project_id, budget, currency");
-    for (const f of fin ?? []) {
+    const fin = await must(
+      "projects.financials",
+      supabase.from("project_financials").select("project_id, budget, currency"),
+    );
+    for (const f of fin) {
       budgetByProject.set(f.project_id, { budget: f.budget, currency: f.currency });
     }
   }

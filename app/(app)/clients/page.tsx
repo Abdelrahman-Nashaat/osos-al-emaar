@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { Plus } from "lucide-react";
 import { getEffectivePermissions, getSessionProfile } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { must } from "@/lib/supabase/fetch";
 import { can } from "@/lib/auth/permission-keys";
 import { PermissionDenied } from "@/components/permission-denied";
 import { LIST_PAGE_SIZE, Pager, parseListParams, SearchBox } from "@/components/list-controls";
@@ -33,9 +34,9 @@ export default async function ClientsPage({
     .order("name", { ascending: true })
     .range(from, to); // one extra row → hasMore
   if (q) clientsQuery = clientsQuery.or(`name.ilike.%${q}%,company.ilike.%${q}%,phone.ilike.%${q}%`);
-  const { data: clientRows } = await clientsQuery;
-  const hasMore = (clientRows ?? []).length > LIST_PAGE_SIZE;
-  const clients = (clientRows ?? []).slice(0, LIST_PAGE_SIZE);
+  const clientRows = await must("clients.list", clientsQuery);
+  const hasMore = clientRows.length > LIST_PAGE_SIZE;
+  const clients = clientRows.slice(0, LIST_PAGE_SIZE);
 
   return (
     <div className="space-y-6">

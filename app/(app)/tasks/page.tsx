@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { Plus } from "lucide-react";
 import { getEffectivePermissions, getSessionProfile } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { must } from "@/lib/supabase/fetch";
 import { can } from "@/lib/auth/permission-keys";
 import { PermissionDenied } from "@/components/permission-denied";
 import { LIST_PAGE_SIZE, Pager, parseListParams, SearchBox } from "@/components/list-controls";
@@ -31,17 +32,18 @@ export default async function TasksPage({
   const { q, page, from } = parseListParams(sp);
 
   const supabase = await createClient();
-  const [{ data: rows }, { data: directory }, { data: projectRows }] = await Promise.all([
-    q
-      ? supabase
-          .from("tasks")
-          .select("id, title, status, priority, progress, due_at, current_assignee_id, project_id")
-          .ilike("title", `%${q}%`)
-          .order("created_at", { ascending: false })
-      : supabase
-          .from("tasks")
-          .select("id, title, status, priority, progress, due_at, current_assignee_id, project_id")
-          .order("created_at", { ascending: false }),
+  const tasksQuery = q
+    ? supabase
+        .from("tasks")
+        .select("id, title, status, priority, progress, due_at, current_assignee_id, project_id")
+        .ilike("title", `%${q}%`)
+        .order("created_at", { ascending: false })
+    : supabase
+        .from("tasks")
+        .select("id, title, status, priority, progress, due_at, current_assignee_id, project_id")
+        .order("created_at", { ascending: false });
+  const [rows, { data: directory }, { data: projectRows }] = await Promise.all([
+    must("tasks.list", tasksQuery),
     supabase.rpc("team_directory"),
     supabase.from("projects").select("id, name").order("name"),
   ]);
@@ -50,7 +52,7 @@ export default async function TasksPage({
   const projectName = new Map((projectRows ?? []).map((p) => [p.id, p.name] as const));
 
   const now = new Date();
-  const all = (rows ?? []).map((t) => ({
+  const all = rows.map((t) => ({
     id: t.id,
     title: t.title,
     status: t.status,

@@ -448,19 +448,24 @@ async function main() {
     { title: "تصميم مسجد حي", category: "ديني", city: "الخبر", year: 2025, cover: "portfolio-mosque.png", desc: "تصميم معماري لمسجد حي يستوعب ٣٠٠ مصلٍّ.", created: "2026-03-15" },
   ];
   for (const item of PORTFOLIO) {
-    const coverStorage = `portfolio/covers/${crypto.randomUUID()}.png`;
     const buf = readFileSync(join(ASSETS, item.cover));
-    await admin.storage.from("attachments").upload(coverStorage, buf, { contentType: "image/png", upsert: true });
     const { data, error } = await admin
       .from("portfolio_items")
       .insert({
         title: item.title, description: item.desc, category: item.category, city: item.city,
         year: item.year, project_id: item.project ? projectId[item.project] ?? null : null,
-        is_published: true, cover_path: coverStorage, created_by: P.khalid.id, created_at: iso(item.created),
+        is_published: true, created_by: P.khalid.id, created_at: iso(item.created),
       })
       .select("id")
       .single();
     if (error) throw new Error(`portfolio ${item.title}: ${error.message}`);
+    // Cover MUST live under portfolio/<itemId>/… : storage_attachment_visible()
+    // (migration 0020) only grants signed-URL access to <entity>/<uuid-36>/ paths,
+    // exactly the layout the upload UI uses. A flat portfolio/covers/… path is
+    // denied by the storage RLS, so covers would never render.
+    const coverStorage = `portfolio/${data.id}/${crypto.randomUUID()}.png`;
+    await admin.storage.from("attachments").upload(coverStorage, buf, { contentType: "image/png", upsert: true });
+    await admin.from("portfolio_items").update({ cover_path: coverStorage }).eq("id", data.id);
     // Also attach the cover as a portfolio attachment (gallery).
     await admin.from("attachments").insert({
       entity_type: "portfolio", entity_id: data.id, storage_path: coverStorage,

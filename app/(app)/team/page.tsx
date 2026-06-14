@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getEffectivePermissions, getSessionProfile } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { must } from "@/lib/supabase/fetch";
 import { can } from "@/lib/auth/permission-keys";
 import { PermissionDenied } from "@/components/permission-denied";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,11 +15,14 @@ export default async function TeamPage() {
   if (!can(perms, "team.manage")) return <PermissionDenied />;
 
   const supabase = await createClient();
-  const [{ data: members }, { data: openTasks }] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("id, full_name, email, role, is_active")
-      .order("created_at", { ascending: true }),
+  const [members, { data: openTasks }] = await Promise.all([
+    must(
+      "team.members",
+      supabase
+        .from("profiles")
+        .select("id, full_name, email, role, is_active")
+        .order("created_at", { ascending: true }),
+    ),
     // Task load per member («task load» from the client requirements).
     supabase.from("tasks").select("current_assignee_id, status").neq("status", "closed"),
   ]);
@@ -27,7 +31,7 @@ export default async function TeamPage() {
     if (!t.current_assignee_id) continue;
     loadById.set(t.current_assignee_id, (loadById.get(t.current_assignee_id) ?? 0) + 1);
   }
-  const memberRows = (members ?? []).map((m) => ({
+  const memberRows = members.map((m) => ({
     ...m,
     open_tasks: loadById.get(m.id) ?? 0,
   }));

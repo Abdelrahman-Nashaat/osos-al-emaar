@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { CalendarDays, ChevronRight, ChevronLeft } from "lucide-react";
+import { CalendarDays, ChevronRight, ChevronLeft, AlertTriangle } from "lucide-react";
 import { getEffectivePermissions, getSessionProfile } from "@/lib/auth/permissions";
 import { can } from "@/lib/auth/permission-keys";
 import { createClient } from "@/lib/supabase/server";
@@ -202,10 +202,13 @@ export default async function CalendarPage({
                           "flex items-center gap-1 truncate rounded px-1 py-0.5 text-[11px] leading-4 hover:bg-muted",
                           e.overdueish && "text-destructive",
                         )}
-                        title={e.label}
+                        title={e.overdueish ? `${e.label} (متأخرة)` : e.label}
                       >
-                        <span className={cn("size-1.5 shrink-0 rounded-full", KIND_META[e.kind].dot)} />
+                        <span className={cn("size-1.5 shrink-0 rounded-full", KIND_META[e.kind].dot)} aria-hidden />
+                        <span className="sr-only">{KIND_META[e.kind].label}</span>
+                        {e.overdueish ? <AlertTriangle className="size-3 shrink-0" aria-hidden /> : null}
                         <span className="truncate">{e.label}</span>
+                        {e.overdueish ? <span className="sr-only">(متأخرة)</span> : null}
                       </Link>
                     ))}
                     {dayEntries.length > 3 ? (
@@ -261,9 +264,10 @@ export default async function CalendarPage({
                           href={e.href}
                           className="flex min-h-10 items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-muted"
                         >
-                          <span className={cn("size-2 shrink-0 rounded-full", KIND_META[e.kind].dot)} />
+                          <span className={cn("size-2 shrink-0 rounded-full", KIND_META[e.kind].dot)} aria-hidden />
                           <span className={cn("truncate", e.overdueish && "text-destructive")}>
                             {e.label}
+                            {e.overdueish ? " (متأخرة)" : ""}
                           </span>
                           <span className="ms-auto shrink-0 text-xs text-muted-foreground">
                             {KIND_META[e.kind].label}

@@ -7,6 +7,7 @@ import { useActionResult } from "@/components/use-action-result";
 import { reversePayment } from "./actions";
 import { PAYMENT_METHOD_LABELS, type PaymentMethod } from "@/lib/finance/invoice";
 import { formatMoney } from "@/lib/projects/money";
+import { formatDate } from "@/lib/format/date";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -80,7 +81,7 @@ export function PaymentsList({
             </div>
             <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
               <span dir="ltr" className="tabular-nums">
-                {p.paid_at.slice(0, 10)}
+                {formatDate(p.paid_at.slice(0, 10))}
               </span>
               {p.reference ? (
                 <span dir="ltr" className="truncate">
