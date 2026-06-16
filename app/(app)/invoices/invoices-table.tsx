@@ -1,8 +1,10 @@
 import Link from "next/link";
+import { ReceiptText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isInvoiceOverdue, outstanding, type InvoiceStatus } from "@/lib/finance/invoice";
 import { formatMoney } from "@/lib/projects/money";
 import { formatDate } from "@/lib/format/date";
+import { EmptyState } from "@/components/empty-state";
 import {
   Table,
   TableBody,
@@ -28,9 +30,11 @@ export type InvoiceListItem = {
 export function InvoicesTable({ invoices }: { invoices: InvoiceListItem[] }) {
   if (invoices.length === 0) {
     return (
-      <p className="rounded-lg border border-border p-6 text-center text-sm text-muted-foreground">
-        لا توجد فواتير مطابقة.
-      </p>
+      <EmptyState
+        icon={ReceiptText}
+        title="لا توجد فواتير مطابقة."
+        description="ستظهر الفواتير هنا فور إصدارها، أو جرّب تغيير البحث والتصفية."
+      />
     );
   }
 

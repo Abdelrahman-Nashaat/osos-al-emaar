@@ -1,7 +1,9 @@
 import Link from "next/link";
+import { ClipboardList } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDate } from "@/lib/format/date";
 import { isTaskOverdue, type TaskPriority, type TaskStatus } from "@/lib/tasks/status";
+import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -28,9 +30,11 @@ export type TaskListItem = {
 export function TasksTable({ tasks }: { tasks: TaskListItem[] }) {
   if (tasks.length === 0) {
     return (
-      <p className="rounded-lg border border-border p-6 text-center text-sm text-muted-foreground">
-        لا توجد مهام مطابقة.
-      </p>
+      <EmptyState
+        icon={ClipboardList}
+        title="لا توجد مهام مطابقة."
+        description="ستظهر المهام هنا فور إسنادها، أو جرّب تغيير البحث والتصفية."
+      />
     );
   }
 

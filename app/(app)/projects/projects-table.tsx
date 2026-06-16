@@ -1,9 +1,11 @@
 import Link from "next/link";
+import { FolderKanban } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isOverdue, type ProjectStatus } from "@/lib/projects/status";
 import { formatMoney } from "@/lib/projects/money";
 import { formatDate } from "@/lib/format/date";
 import { ProjectCode } from "@/lib/projects/label";
+import { EmptyState } from "@/components/empty-state";
 import { StatusBadge } from "./status-badge";
 import { ProgressBar } from "./progress-bar";
 import {
@@ -37,9 +39,11 @@ export function ProjectsTable({
 }) {
   if (projects.length === 0) {
     return (
-      <p className="rounded-lg border border-border p-6 text-center text-sm text-muted-foreground">
-        لا توجد مشاريع بعد.
-      </p>
+      <EmptyState
+        icon={FolderKanban}
+        title="لا توجد مشاريع بعد."
+        description="ستظهر مشاريع المكتب هنا فور إضافتها."
+      />
     );
   }
 

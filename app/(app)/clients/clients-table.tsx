@@ -3,10 +3,11 @@
 import { useTransition } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, Users } from "lucide-react";
 import { deleteClient } from "./actions";
 import { ClientFormDialog, type ClientRow } from "./client-form";
 import { PhoneLinks } from "@/lib/format/contact";
+import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -37,9 +38,11 @@ export function ClientsTable({
 }) {
   if (clients.length === 0) {
     return (
-      <p className="rounded-lg border border-border p-6 text-center text-sm text-muted-foreground">
-        لا يوجد عملاء بعد.
-      </p>
+      <EmptyState
+        icon={Users}
+        title="لا يوجد عملاء بعد."
+        description="ستظهر بيانات عملاء المكتب هنا فور إضافتهم."
+      />
     );
   }
 

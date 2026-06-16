@@ -1,7 +1,9 @@
 import Link from "next/link";
+import { FileText } from "lucide-react";
 import { formatMoney } from "@/lib/projects/money";
 import { formatDate } from "@/lib/format/date";
 import { isOfferStale, type OfferStatus } from "@/lib/offers/offer";
+import { EmptyState } from "@/components/empty-state";
 import { OfferStatusBadge } from "./offer-status-badge";
 import {
   Table,
@@ -27,7 +29,13 @@ export type OfferListRow = {
 /** Desktop table ≥md + stacked cards <md (house responsive pattern). */
 export function OffersTable({ offers }: { offers: OfferListRow[] }) {
   if (offers.length === 0) {
-    return <p className="py-8 text-center text-sm text-muted-foreground">لا توجد عروض مطابقة.</p>;
+    return (
+      <EmptyState
+        icon={FileText}
+        title="لا توجد عروض مطابقة."
+        description="ستظهر عروض المكتب هنا فور إنشائها، أو جرّب تغيير البحث والتصفية."
+      />
+    );
   }
 
   return (
