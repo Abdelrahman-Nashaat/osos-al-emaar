@@ -30,7 +30,10 @@ export async function proxy(request: NextRequest) {
     "default-src 'self'",
     scriptSrc,
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob:",
+    // Portfolio covers (and any inline image attachment) render from a signed
+    // Supabase Storage URL — without the project origin here, CSP blocks them
+    // and only the placeholder shows.
+    `img-src 'self' data: blob: ${NEXT_PUBLIC_SUPABASE_URL}`,
     "font-src 'self'",
     // media-src: voice notes play from a recording blob: preview and from a
     // signed Supabase Storage URL; both are blocked by the default-src fallback.

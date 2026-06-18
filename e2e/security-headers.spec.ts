@@ -22,6 +22,8 @@ test("security headers + enforced CSP are present on responses", async ({ reques
   // Supabase REST + Realtime must stay reachable under the enforced policy.
   expect(csp).toMatch(/connect-src [^;]*https:\/\/[a-z0-9]+\.supabase\.co/);
   expect(csp).toMatch(/connect-src [^;]*wss:\/\/[a-z0-9]+\.supabase\.co/);
+  // Signed Storage images (portfolio covers / inline attachments) must render.
+  expect(csp).toMatch(/img-src [^;]*https:\/\/[a-z0-9]+\.supabase\.co/);
 
   // The Report-Only phase is over.
   expect(h["content-security-policy-report-only"]).toBeUndefined();
