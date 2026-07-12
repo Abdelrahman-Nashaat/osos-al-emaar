@@ -73,6 +73,25 @@ test("manifest exposes install metadata + shortcuts", async ({ request }) => {
   expect(Array.isArray(m.screenshots)).toBeTruthy();
 });
 
+test("push dispatch route rejects unauthenticated callers", async ({ request }) => {
+  // Security guard: the dispatch route must NEVER process a notification without
+  // the shared bearer secret. A missing/wrong Authorization header must be
+  // refused (401 when configured, 503 when the secret isn't set) — never 200.
+  const noAuth = await request.post("/api/push/dispatch", {
+    data: { notification_id: 1 },
+    headers: { "Content-Type": "application/json" },
+    failOnStatusCode: false,
+  });
+  expect([401, 503]).toContain(noAuth.status());
+
+  const wrongAuth = await request.post("/api/push/dispatch", {
+    data: { notification_id: 1 },
+    headers: { "Content-Type": "application/json", Authorization: "Bearer definitely-wrong" },
+    failOnStatusCode: false,
+  });
+  expect([401, 503]).toContain(wrongAuth.status());
+});
+
 test("Android install banner appears on beforeinstallprompt @mobile", async ({ page }) => {
   await loginManager(page);
   await page.evaluate(() => {
