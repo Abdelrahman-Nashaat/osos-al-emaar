@@ -14,7 +14,8 @@
     "verify:admin": "tsx scripts/verify-admin.ts",
     "bootstrap": "tsx scripts/bootstrap-admin.ts",
     "backup:snapshot": "tsx scripts/backup-snapshot.ts",
-    "seed:demo": "tsx scripts/demo/seed.ts"
+    "seed:demo": "tsx scripts/demo/seed.ts",
+    "gen:assets": "node scripts/gen-ios-splash.mjs > .splash-links.html && node scripts/gen-screenshots.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.3",

@@ -25,6 +25,7 @@ import { brand } from "@/lib/config/brand";
 import { cn } from "@/lib/utils";
 import { usePermissions } from "@/components/auth/permissions-provider";
 import { signOut } from "@/app/(app)/actions";
+import { InstallPrompt } from "@/components/install-prompt";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -208,6 +209,8 @@ export function AppShell({
           </nav>
         </DialogContent>
       </Dialog>
+
+      <InstallPrompt />
     </div>
   );
 }
