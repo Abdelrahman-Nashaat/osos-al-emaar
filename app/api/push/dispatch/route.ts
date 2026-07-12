@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { timingSafeEqual } from "node:crypto";
 import webpush from "web-push";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getVapidKeys, getPushDispatchSecret } from "@/lib/env";
@@ -11,6 +12,13 @@ export const dynamic = "force-dynamic";
 // bearer secret used ONLY by the notifications trigger (pg_net). It reads
 // subscriptions with the service role (server-only) and prunes dead endpoints.
 
+// Constant-time compare so the bearer check can't leak the secret via timing.
+function safeEqual(a: string, b: string): boolean {
+  const ab = Buffer.from(a);
+  const bb = Buffer.from(b);
+  return ab.length === bb.length && timingSafeEqual(ab, bb);
+}
+
 export async function POST(request: NextRequest) {
   const auth = request.headers.get("authorization") ?? "";
   let expected: string;
@@ -19,7 +27,7 @@ export async function POST(request: NextRequest) {
   } catch {
     return NextResponse.json({ error: "not_configured" }, { status: 503 });
   }
-  if (auth !== expected) {
+  if (!safeEqual(auth, expected)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
