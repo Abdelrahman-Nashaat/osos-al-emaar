@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useActionResult } from "@/components/use-action-result";
+import { useComposeParam } from "@/components/use-compose-param";
 import { createInvoice, updateInvoice } from "./actions";
 import { VAT_RATES, VAT_RATE_LABELS } from "@/lib/finance/invoice";
 import { Button } from "@/components/ui/button";
@@ -51,6 +52,8 @@ export function InvoiceFormDialog({
   const [formError, setFormError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const onResult = useActionResult();
+  // Only the list-page create dialog opens from ?compose=1 deep links.
+  useComposeParam(setOpen, !isEdit && !lockedProjectId);
 
   function handleSubmit(formData: FormData) {
     // Instant cross-field check (the server re-validates — B8).

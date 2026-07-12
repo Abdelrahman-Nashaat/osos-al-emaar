@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useActionResult } from "@/components/use-action-result";
+import { useComposeParam } from "@/components/use-compose-param";
 import { createTask } from "./actions";
 import { TASK_PRIORITIES, TASK_PRIORITY_LABELS } from "@/lib/tasks/status";
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,8 @@ export function TaskFormDialog({
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const onResult = useActionResult();
+  // The list-page composer (no locked project) opens from ?compose=1 deep links.
+  useComposeParam(setOpen, !lockedProjectId);
 
   function handleSubmit(formData: FormData) {
     startTransition(async () => {

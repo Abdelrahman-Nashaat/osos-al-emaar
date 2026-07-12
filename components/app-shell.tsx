@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 import { usePermissions } from "@/components/auth/permissions-provider";
 import { signOut } from "@/app/(app)/actions";
 import { InstallPrompt } from "@/components/install-prompt";
+import { QuickAddFab } from "@/components/quick-add-fab";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -210,6 +211,7 @@ export function AppShell({
         </DialogContent>
       </Dialog>
 
+      <QuickAddFab />
       <InstallPrompt />
     </div>
   );

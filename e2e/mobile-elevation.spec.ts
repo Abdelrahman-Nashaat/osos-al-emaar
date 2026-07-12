@@ -13,20 +13,26 @@ const admin = createClient(url, service, {
 
 const ts = Date.now();
 const mgr = { email: `e2e-mob-mgr-${ts}@example.com`, password: `Test!${ts}Mm`, name: "مدير موبايل" };
+const eng = { email: `e2e-mob-eng-${ts}@example.com`, password: `Test!${ts}En`, name: "مهندس موبايل" };
 let mgrId = "";
+let engId = "";
 let clientId = "";
 let projectId = "";
 
-test.beforeAll(async () => {
+async function seedUser(u: { email: string; password: string; name: string }, role: string) {
   const created = await admin.auth.admin.createUser({
-    email: mgr.email,
-    password: mgr.password,
+    email: u.email,
+    password: u.password,
     email_confirm: true,
   });
-  mgrId = created.data.user?.id ?? "";
-  await admin
-    .from("profiles")
-    .insert({ id: mgrId, full_name: mgr.name, email: mgr.email, role: "manager" });
+  const id = created.data.user?.id ?? "";
+  await admin.from("profiles").insert({ id, full_name: u.name, email: u.email, role });
+  return id;
+}
+
+test.beforeAll(async () => {
+  mgrId = await seedUser(mgr, "manager");
+  engId = await seedUser(eng, "engineer");
 
   const { data: c } = await admin
     .from("clients")
@@ -45,18 +51,23 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   if (projectId) await admin.from("projects").delete().eq("id", projectId);
   if (clientId) await admin.from("clients").delete().eq("id", clientId);
-  if (mgrId) {
-    await admin.from("profiles").delete().eq("id", mgrId);
-    await admin.auth.admin.deleteUser(mgrId);
+  for (const id of [mgrId, engId]) {
+    if (!id) continue;
+    await admin.from("profiles").delete().eq("id", id);
+    await admin.auth.admin.deleteUser(id);
   }
 });
 
-async function loginManager(page: Page) {
+async function loginAs(page: Page, email: string, password: string) {
   await page.goto("/login");
-  await page.getByLabel("البريد الإلكتروني").fill(mgr.email);
-  await page.getByLabel("كلمة المرور").fill(mgr.password);
+  await page.getByLabel("البريد الإلكتروني").fill(email);
+  await page.getByLabel("كلمة المرور").fill(password);
   await page.getByRole("button", { name: "تسجيل الدخول" }).click();
   await page.waitForURL("**/dashboard");
+}
+
+async function loginManager(page: Page) {
+  await loginAs(page, mgr.email, mgr.password);
 }
 
 test("manifest exposes install metadata + shortcuts", async ({ request }) => {
@@ -112,6 +123,26 @@ test("attachments card exposes a camera capture input @mobile", async ({ page })
   const cam = page.locator('input[accept="image/*"][capture="environment"]');
   await expect(cam).toHaveCount(1);
   await expect(page.getByRole("button", { name: "التقاط صورة", exact: true })).toBeVisible();
+});
+
+test("quick-add FAB: manager can open «مهمة جديدة» which deep-links to the composer @mobile", async ({
+  page,
+}) => {
+  await loginManager(page);
+  const fab = page.getByRole("button", { name: "إضافة سريعة" });
+  await expect(fab).toBeVisible();
+  await fab.click();
+  await page.getByRole("menuitem", { name: "مهمة جديدة" }).click();
+  // Deep link lands on /tasks and the ?compose=1 param auto-opens the composer.
+  await page.waitForURL("**/tasks?compose=1");
+  await expect(page.getByLabel("عنوان المهمة")).toBeVisible();
+});
+
+test("quick-add FAB: a view-only engineer sees no quick-add (no create perms) @mobile", async ({
+  page,
+}) => {
+  await loginAs(page, eng.email, eng.password);
+  await expect(page.getByRole("button", { name: "إضافة سريعة" })).toHaveCount(0);
 });
 
 test("notifications panel shows the push enable toggle @pwa", async ({ page }) => {

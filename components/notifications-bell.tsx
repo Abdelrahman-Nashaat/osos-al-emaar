@@ -54,6 +54,18 @@ export function NotificationsBell() {
     ]);
     setItems(rows ?? []);
     setUnread(count ?? 0);
+    // Reflect the unread count on the installed-app icon (PWA Badging API).
+    // Progressive: browsers without support (incl. iOS today) simply skip it.
+    // load() is the single source of truth, so the badge also clears the moment
+    // rows are marked read (which re-runs load()).
+    const nav = navigator as Navigator & {
+      setAppBadge?: (n?: number) => Promise<void>;
+      clearAppBadge?: () => Promise<void>;
+    };
+    if (typeof nav.setAppBadge === "function") {
+      const c = count ?? 0;
+      void (c > 0 ? nav.setAppBadge(c) : nav.clearAppBadge?.());
+    }
   }, []);
 
   useEffect(() => {
