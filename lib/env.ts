@@ -36,3 +36,26 @@ export function getServiceRoleKey(): string {
   return key;
 }
 
+/** Public VAPID key — safe in the browser bundle (NEXT_PUBLIC_*). */
+export function getVapidPublicKey(): string {
+  const key = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  if (!key) throw new Error("Missing NEXT_PUBLIC_VAPID_PUBLIC_KEY.");
+  return key;
+}
+
+/** Server-only VAPID material for signing Web Push notifications. */
+export function getVapidKeys(): { publicKey: string; privateKey: string; subject: string } {
+  const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  const privateKey = process.env.VAPID_PRIVATE_KEY;
+  const subject = process.env.VAPID_SUBJECT ?? "mailto:admin@osos-al-emaar.com";
+  if (!publicKey || !privateKey) throw new Error("Missing VAPID key material (server-only).");
+  return { publicKey, privateKey, subject };
+}
+
+/** Shared secret the notifications trigger uses to authenticate to /api/push/dispatch. */
+export function getPushDispatchSecret(): string {
+  const s = process.env.PUSH_DISPATCH_SECRET;
+  if (!s) throw new Error("Missing PUSH_DISPATCH_SECRET (server-only).");
+  return s;
+}
+

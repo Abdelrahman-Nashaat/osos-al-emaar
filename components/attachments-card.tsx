@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { AudioLines, Download, FileText, Image as ImageIcon, Loader2, Paperclip, Trash2, Upload } from "lucide-react";
+import { AudioLines, Camera, Download, FileText, Image as ImageIcon, Loader2, Paperclip, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { uploadAttachment, deleteAttachment, getAttachmentUrl } from "@/app/(app)/attachments/actions";
 import { useActionResult } from "@/components/use-action-result";
@@ -40,6 +40,7 @@ export function AttachmentsCard({
   title?: string;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
   const [uploading, startUpload] = useTransition();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [playing, setPlaying] = useState<{ id: string; url: string } | null>(null);
@@ -54,6 +55,7 @@ export function AttachmentsCard({
     startUpload(async () => {
       handle(await uploadAttachment(fd));
       if (fileRef.current) fileRef.current.value = "";
+      if (cameraRef.current) cameraRef.current.value = "";
     });
   };
 
@@ -99,6 +101,27 @@ export function AttachmentsCard({
         {canUpload ? (
           <div className="flex flex-wrap items-center justify-end gap-2">
             <VoiceNoteRecorder uploading={uploading} onSubmit={onPick} />
+            {/* Camera capture — opens the rear camera directly on a phone; on
+                desktop it falls back to the file picker. Same upload path. */}
+            <input
+              ref={cameraRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="sr-only"
+              aria-label="التقاط صورة بالكاميرا"
+              onChange={(e) => onPick(e.target.files?.[0])}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={uploading}
+              onClick={() => cameraRef.current?.click()}
+            >
+              <Camera className="size-4" />
+              التقاط صورة
+            </Button>
             <input
               ref={fileRef}
               type="file"

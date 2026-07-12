@@ -19,6 +19,7 @@ import { InvoiceActions } from "../invoice-actions";
 import { PaymentsList, type PaymentRow } from "../payments-list";
 import { InvoiceTimeline, type InvoiceTimelineItem } from "../invoice-timeline";
 import { PrintButton } from "../print-button";
+import { ShareButton } from "@/components/share-button";
 import { InvoicePrintDocument } from "./invoice-print-document";
 
 export default async function InvoiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -131,7 +132,14 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
             <InvoiceStatusBadge status={invoice.status} />
           </div>
         </div>
-        <PrintButton />
+        <div className="flex items-center gap-2">
+          <ShareButton
+            title={`فاتورة ${invoice.invoice_number}`}
+            text={`فاتورة من ${office.office_name}`}
+            url={`/invoices/${invoice.id}`}
+          />
+          <PrintButton />
+        </div>
       </div>
 
       {/* Actions */}

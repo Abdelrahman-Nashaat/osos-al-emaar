@@ -9,6 +9,8 @@ loadEnvConfig(process.cwd());
 // are blocked everywhere except a future @pwa project (slice C) for stability.
 export default defineConfig({
   testDir: "./e2e",
+  // Refuses to run against a DB with real users (pollution guard) — see the file.
+  globalSetup: "./e2e/global-setup.ts",
   fullyParallel: false,
   workers: 1,
   forbidOnly: !!process.env.CI,

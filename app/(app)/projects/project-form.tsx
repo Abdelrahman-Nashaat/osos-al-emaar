@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useActionResult } from "@/components/use-action-result";
+import { useComposeParam } from "@/components/use-compose-param";
 import { saveProject } from "./actions";
 import {
   PROJECT_STATUSES,
@@ -51,6 +52,8 @@ export function ProjectFormDialog({
   const [formError, setFormError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const onResult = useActionResult();
+  // Only the create dialog opens from ?compose=1 deep links (not edit instances).
+  useComposeParam(setOpen, !isEdit);
 
   function handleSubmit(formData: FormData) {
     // Instant cross-field check (the server re-validates — B8).

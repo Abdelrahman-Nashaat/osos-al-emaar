@@ -7,10 +7,10 @@ const securityHeaders = [
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "X-Frame-Options", value: "DENY" },
   {
-    // microphone=(self): in-app voice notes (engineers dictate site updates) use
-    // the same-origin MediaRecorder. camera/geolocation stay fully disabled.
+    // camera=(self) + microphone=(self): engineers capture site-visit photos and
+    // dictate voice notes through same-origin device APIs. geolocation stays off.
     key: "Permissions-Policy",
-    value: "camera=(), microphone=(self), geolocation=(), browsing-topics=()",
+    value: "camera=(self), microphone=(self), geolocation=(), browsing-topics=()",
   },
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
 ];

@@ -1,10 +1,15 @@
 # Operations Runbook — Osos Al-Emaar
 
-> Environment status: the current Supabase project (`anqrrhqjkmvaymvkdjtj`,
-> eu-central-1) and Vercel project (`osos-al-emaar`) are **STAGING/DEMO**. No
-> real operational or financial data exists yet. Production provisioning,
-> client-owned accounts, billing, domain, and secret rotation happen in the
-> separate **Production Launch** phase.
+> Environment status (updated 2026-07-12): the Supabase project
+> (`anqrrhqjkmvaymvkdjtj`, eu-central-1) + Vercel project (`osos-al-emaar`) have
+> begun **real use** — the client added real staff accounts (accountant +
+> engineer). No real invoices/payments exist **yet**, but the pilot has
+> effectively started, so the **Pre-Launch Production Gate below now applies**
+> (backups + leaked-password protection especially). Treat all data as
+> production-sensitive; e2e/verify scripts use disposable `@example.com` users
+> that self-clean and must never notify or mutate real accounts. Production
+> domain, client-owned accounts, and secret rotation remain in the **Production
+> Launch** phase.
 
 ## Pre-Launch Production Gate (REQUIRED before real data / client pilot)
 
@@ -80,6 +85,66 @@ select jobid, jobname, schedule, active from cron.job where jobname = 'daily-rem
 select public.run_daily_reminders();
 ```
 
+## Mobile app / PWA install / Web Push (migrations 0028–0029)
+
+The app is an installable field PWA: Android shows an in-app «ثبّت التطبيق»
+banner (`beforeinstallprompt`); iOS shows Add-to-Home-Screen instructions
+(`components/install-prompt.tsx`). Extras: camera capture on «المرفقات»
+(`capture="environment"`, `Permissions-Policy: camera=(self)`), an app-icon
+unread **badge** (Badging API), a mobile **quick-add FAB**, and a **native share**
+button (device share sheet) on invoice / offer / portfolio details. No app-store
+packaging and no server-side WhatsApp/email — sending is the user's share sheet.
+
+**Web Push pipeline** (closed-app delivery):
+
+1. A device subscribes via the bell → «تفعيل الإشعارات» (`push_subscribe` definer
+   RPC → `push_subscriptions`, RLS own-row only — migration 0028).
+2. Any `notifications` INSERT fires the `notifications_push_dispatch` trigger
+   (migration 0029), which `pg_net`-POSTs `{notification_id}` to
+   `/api/push/dispatch` with a Vault-held bearer secret. Fire-and-forget; never
+   blocks the writing transaction; graceful no-op if Vault is unset.
+3. The route (Node runtime, self-authenticated — `/api/*` is NOT proxy-gated)
+   reads the row + the recipient's subscriptions with the service role, sends via
+   `web-push`, and prunes dead endpoints (404/410).
+
+**Financial isolation holds by construction:** push only forwards a notification
+ROW, and financial rows are created only for manager/accountant
+(`notify_invoice_event`, 0022). An engineer can never receive a financial push.
+`verify:rls` asserts "no engineer owns any invoice_* notification".
+
+**Secrets & env** (never committed; in `.env.local` + Vercel + Vault):
+
+| Key | Where | Purpose |
+|---|---|---|
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Vercel (Prod+Preview), client bundle | Push subscription public key |
+| `VAPID_PRIVATE_KEY` | Vercel (Prod+Preview), server | Signs push messages |
+| `VAPID_SUBJECT` | Vercel | `mailto:` contact for push services |
+| `PUSH_DISPATCH_SECRET` | Vercel + Vault `push_dispatch_secret` | Bearer the trigger sends / the route checks (must match byte-for-byte) |
+| — | Vault `push_dispatch_url` | `https://osos-al-emaar.vercel.app/api/push/dispatch` |
+
+**Enable push (user):** open the bell → «تفعيل الإشعارات». On **iOS** the app must
+first be **installed to the Home Screen** (Share → Add to Home Screen); Safari
+tabs cannot receive Web Push. Android/desktop Chrome work in-browser once installed.
+
+**Rotate the dispatch secret** — update BOTH sides (mismatch → every push 401s):
+
+```sql
+-- 1) set a new Vercel env value: vercel env rm PUSH_DISPATCH_SECRET production && vercel env add …
+-- 2) update the Vault copy to the SAME value:
+select vault.update_secret(id, '<new-secret>') from vault.decrypted_secrets where name = 'push_dispatch_secret';
+```
+
+**Rotate VAPID keys:** regenerate a pair, update `NEXT_PUBLIC_VAPID_PUBLIC_KEY` +
+`VAPID_PRIVATE_KEY` in Vercel, redeploy. Existing subscriptions become invalid —
+users re-enable; stale endpoints are auto-pruned on the next send.
+
+```sql
+-- Inspect delivery / wiring:
+select id, status_code, error_msg, created from net._http_response order by id desc limit 5;
+select count(*) from public.push_subscriptions;                    -- active devices
+select name from vault.decrypted_secrets where name like 'push_dispatch%';
+```
+
 ## Demo environment
 
 A fully isolated demo (separate Supabase + Vercel project) is provisioned and
@@ -135,6 +200,30 @@ before applying migrations to the live DB** · 11. commit → push →
 - **Service worker:** `public/sw.js` must NEVER cache HTML/RSC/`/api` —
   documents carry role-gated financial data. Bump the `CACHE` version on any
   SW change; the client shows an Arabic reload toast on update.
+
+## E2E test-data safety (real-user pollution guard)
+
+The Playwright functional suite creates tasks/invoices/payments; their DB triggers
+(0022/0026) insert notifications for **every active manager/accountant by role**,
+and after 0029 those also Web-Push. So the suite must run against a **disposable**
+project, never the live one. A `globalSetup` (`e2e/global-setup.ts`) **refuses to
+run** when the target DB has any non-`@example.com` profile, printing how to fix it.
+
+- **Correct fix:** point `NEXT_PUBLIC_SUPABASE_URL` (+ anon/service keys) at the
+  demo project (`osos-al-emaar-demo`) when running Playwright. Keep `.env.local`
+  (prod) for the app and for `verify:rls` (which is read-only / self-cleaning and
+  never notifies).
+- **One-off override:** `E2E_ALLOW_PROD=1 npx playwright test …` — this pollutes
+  real bells. Clean residue afterwards (notifications whose `href` points at a
+  now-deleted task/invoice/offer, for non-`@example.com` owners):
+
+```sql
+delete from public.notifications n using public.profiles p
+where p.id = n.user_id and p.email not like '%@example.com'
+  and ( (n.type like 'task_%'    and not exists (select 1 from public.tasks t    where '/tasks/'||t.id = n.href))
+     or (n.type like 'invoice_%' and not exists (select 1 from public.invoices i where '/invoices/'||i.id = n.href))
+     or (n.type like 'offer_%'   and not exists (select 1 from public.offers o   where '/offers/'||o.id = n.href)) );
+```
 
 ## Logging convention
 

@@ -15,6 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PortfolioFormDialog } from "../portfolio-form";
 import { PortfolioGallery, type GalleryImage } from "../portfolio-gallery";
 import { DeletePortfolioItemButton } from "../delete-item-button";
+import { ShareButton } from "@/components/share-button";
 import { must } from "@/lib/supabase/fetch";
 
 /** Portfolio item detail: info, gallery, cover pick, attachments upload. */
@@ -81,29 +82,36 @@ export default async function PortfolioItemPage({ params }: { params: Promise<{ 
           </div>
           {meta ? <p className="text-sm text-muted-foreground">{meta}</p> : null}
         </div>
-        {canEdit ? (
-          <div className="flex gap-2">
-            <PortfolioFormDialog
-              projects={projects}
-              item={{
-                id: item.id,
-                title: item.title,
-                description: item.description,
-                category: item.category,
-                city: item.city,
-                year: item.year,
-                project_id: item.project_id,
-                is_published: item.is_published,
-              }}
-              trigger={
-                <Button size="sm" variant="outline">
-                  <Pencil className="size-4" /> تعديل
-                </Button>
-              }
-            />
-            <DeletePortfolioItemButton id={item.id} title={item.title} />
-          </div>
-        ) : null}
+        <div className="flex gap-2">
+          <ShareButton
+            title={item.title}
+            text={meta ? `${item.title} — ${meta}` : item.title}
+            url={`/portfolio/${item.id}`}
+          />
+          {canEdit ? (
+            <>
+              <PortfolioFormDialog
+                projects={projects}
+                item={{
+                  id: item.id,
+                  title: item.title,
+                  description: item.description,
+                  category: item.category,
+                  city: item.city,
+                  year: item.year,
+                  project_id: item.project_id,
+                  is_published: item.is_published,
+                }}
+                trigger={
+                  <Button size="sm" variant="outline">
+                    <Pencil className="size-4" /> تعديل
+                  </Button>
+                }
+              />
+              <DeletePortfolioItemButton id={item.id} title={item.title} />
+            </>
+          ) : null}
+        </div>
       </div>
 
       {item.description ? (
