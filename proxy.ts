@@ -73,8 +73,10 @@ export async function proxy(request: NextRequest) {
   } = await supabase.auth.getUser();
   const { pathname } = request.nextUrl;
   const isAuthRoute = pathname.startsWith("/login");
+  // /install is a PUBLIC install-landing (shareable link) — reachable signed-out.
+  const isPublicRoute = isAuthRoute || pathname.startsWith("/install");
 
-  if (!user && !isAuthRoute) {
+  if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);

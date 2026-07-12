@@ -1,6 +1,8 @@
 "use client";
 
 import { useActionState } from "react";
+import Link from "next/link";
+import { Smartphone } from "lucide-react";
 import { signIn, type LoginState } from "./actions";
 import { brand } from "@/lib/config/brand";
 import { Button } from "@/components/ui/button";
@@ -20,7 +22,8 @@ export default function LoginPage() {
   const [state, formAction, pending] = useActionState(signIn, initialState);
 
   return (
-    <Card className="w-full max-w-sm">
+    <div className="w-full max-w-sm space-y-4">
+    <Card className="w-full">
       <CardHeader className="text-center">
         <CardTitle className="text-xl">{brand.nameAr}</CardTitle>
         <CardDescription>{brand.taglineAr}</CardDescription>
@@ -61,5 +64,13 @@ export default function LoginPage() {
         </form>
       </CardContent>
     </Card>
+      <Link
+        href="/install"
+        className="flex items-center justify-center gap-1.5 text-sm text-muted-foreground hover:text-foreground hover:underline"
+      >
+        <Smartphone className="size-4" />
+        تثبيت التطبيق على الجوال
+      </Link>
+    </div>
   );
 }
