@@ -14,6 +14,8 @@ const admin = createClient(url, service, {
 const ts = Date.now();
 const mgr = { email: `e2e-mob-mgr-${ts}@example.com`, password: `Test!${ts}Mm`, name: "مدير موبايل" };
 let mgrId = "";
+let clientId = "";
+let projectId = "";
 
 test.beforeAll(async () => {
   const created = await admin.auth.admin.createUser({
@@ -25,9 +27,24 @@ test.beforeAll(async () => {
   await admin
     .from("profiles")
     .insert({ id: mgrId, full_name: mgr.name, email: mgr.email, role: "manager" });
+
+  const { data: c } = await admin
+    .from("clients")
+    .insert({ name: `عميل موبايل ${ts}`, created_by: mgrId })
+    .select("id")
+    .single();
+  clientId = c?.id ?? "";
+  const { data: p } = await admin
+    .from("projects")
+    .insert({ name: `مشروع موبايل ${ts}`, client_id: clientId, status: "active", created_by: mgrId })
+    .select("id")
+    .single();
+  projectId = p?.id ?? "";
 });
 
 test.afterAll(async () => {
+  if (projectId) await admin.from("projects").delete().eq("id", projectId);
+  if (clientId) await admin.from("clients").delete().eq("id", clientId);
   if (mgrId) {
     await admin.from("profiles").delete().eq("id", mgrId);
     await admin.auth.admin.deleteUser(mgrId);
@@ -68,4 +85,12 @@ test("Android install banner appears on beforeinstallprompt @mobile", async ({ p
     window.dispatchEvent(e);
   });
   await expect(page.getByRole("button", { name: "ثبّت التطبيق" })).toBeVisible();
+});
+
+test("attachments card exposes a camera capture input @mobile", async ({ page }) => {
+  await loginManager(page);
+  await page.goto(`/projects/${projectId}`);
+  const cam = page.locator('input[accept="image/*"][capture="environment"]');
+  await expect(cam).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "التقاط صورة", exact: true })).toBeVisible();
 });

@@ -9,7 +9,7 @@ test("security headers + enforced CSP are present on responses", async ({ reques
   expect(h["x-content-type-options"]).toBe("nosniff");
   expect(h["referrer-policy"]).toBe("strict-origin-when-cross-origin");
   expect(h["x-frame-options"]).toBe("DENY");
-  expect(h["permissions-policy"] ?? "").toContain("camera=()");
+  expect(h["permissions-policy"] ?? "").toContain("camera=(self)");
   expect(h["strict-transport-security"] ?? "").toContain("max-age=");
 
   const csp = h["content-security-policy"] ?? "";
