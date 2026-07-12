@@ -65,3 +65,45 @@ self.addEventListener("fetch", (event) => {
 
   // Everything else (RSC payloads, /api/*, data): network-only — no respondWith.
 });
+
+// ── Web Push (mobile-elevation) ────────────────────────────────────────────
+// Display the pushed notification. Payload is JSON: { title, body, href, tag }.
+// The SW only renders what the server signed — no caching, no data reads. The
+// notification row is already role-scoped (financial rows exist only for finance
+// recipients), so this never leaks amounts to an engineer.
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = {};
+  }
+  const title = data.title || "أسس الإعمار";
+  const options = {
+    body: data.body || "",
+    icon: "/icons/icon-192.png",
+    badge: "/icons/icon-192.png",
+    dir: "rtl",
+    lang: "ar",
+    data: { href: data.href || "/dashboard" },
+    tag: data.tag || undefined,
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+// Focus an existing tab on the target href, or open a new one.
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const href = (event.notification.data && event.notification.data.href) || "/dashboard";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
+      for (const client of list) {
+        if ("focus" in client) {
+          if ("navigate" in client) client.navigate(href);
+          return client.focus();
+        }
+      }
+      return self.clients.openWindow(href);
+    })
+  );
+});

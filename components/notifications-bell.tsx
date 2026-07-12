@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { formatDateTime } from "@/lib/format/date";
 import { cn } from "@/lib/utils";
+import { PushToggle } from "@/components/push-toggle";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -132,17 +133,20 @@ export function NotificationsBell() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-80 p-0">
-        <div className="flex items-center justify-between border-b border-border px-3 py-2">
+        <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
           <p className="text-sm font-semibold">الإشعارات</p>
-          {items.some((i) => !i.read_at) || unread > 0 ? (
-            <button
-              type="button"
-              onClick={markAll}
-              className="text-xs text-muted-foreground hover:text-foreground"
-            >
-              تحديد الكل كمقروء
-            </button>
-          ) : null}
+          <div className="flex items-center gap-3">
+            <PushToggle />
+            {items.some((i) => !i.read_at) || unread > 0 ? (
+              <button
+                type="button"
+                onClick={markAll}
+                className="text-xs text-muted-foreground hover:text-foreground"
+              >
+                تحديد الكل كمقروء
+              </button>
+            ) : null}
+          </div>
         </div>
         <div className="max-h-96 overflow-y-auto">
           {items.length === 0 ? (

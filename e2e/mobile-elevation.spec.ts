@@ -94,3 +94,9 @@ test("attachments card exposes a camera capture input @mobile", async ({ page })
   await expect(cam).toHaveCount(1);
   await expect(page.getByRole("button", { name: "التقاط صورة", exact: true })).toBeVisible();
 });
+
+test("notifications panel shows the push enable toggle @pwa", async ({ page }) => {
+  await loginManager(page);
+  await page.getByRole("button", { name: "الإشعارات", exact: true }).click();
+  await expect(page.getByRole("button", { name: "تفعيل الإشعارات" })).toBeVisible();
+});

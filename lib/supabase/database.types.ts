@@ -850,6 +850,47 @@ export type Database = {
           },
         ]
       }
+      push_subscriptions: {
+        Row: {
+          auth: string
+          created_at: string
+          endpoint: string
+          id: number
+          last_seen_at: string
+          p256dh: string
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          auth: string
+          created_at?: string
+          endpoint: string
+          id?: never
+          last_seen_at?: string
+          p256dh: string
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          auth?: string
+          created_at?: string
+          endpoint?: string
+          id?: never
+          last_seen_at?: string
+          p256dh?: string
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "push_subscriptions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       role_permissions: {
         Row: {
           allowed: boolean
@@ -1156,6 +1197,16 @@ export type Database = {
         Args: { p_progress: number; p_project: string }
         Returns: undefined
       }
+      push_subscribe: {
+        Args: {
+          p_auth: string
+          p_endpoint: string
+          p_p256dh: string
+          p_ua: string
+        }
+        Returns: undefined
+      }
+      push_unsubscribe: { Args: { p_endpoint: string }; Returns: undefined }
       storage_attachment_visible: { Args: { p_name: string }; Returns: boolean }
       task_add_note: {
         Args: { p_note: string; p_task: string }
