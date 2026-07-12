@@ -201,6 +201,30 @@ before applying migrations to the live DB** · 11. commit → push →
   documents carry role-gated financial data. Bump the `CACHE` version on any
   SW change; the client shows an Arabic reload toast on update.
 
+## E2E test-data safety (real-user pollution guard)
+
+The Playwright functional suite creates tasks/invoices/payments; their DB triggers
+(0022/0026) insert notifications for **every active manager/accountant by role**,
+and after 0029 those also Web-Push. So the suite must run against a **disposable**
+project, never the live one. A `globalSetup` (`e2e/global-setup.ts`) **refuses to
+run** when the target DB has any non-`@example.com` profile, printing how to fix it.
+
+- **Correct fix:** point `NEXT_PUBLIC_SUPABASE_URL` (+ anon/service keys) at the
+  demo project (`osos-al-emaar-demo`) when running Playwright. Keep `.env.local`
+  (prod) for the app and for `verify:rls` (which is read-only / self-cleaning and
+  never notifies).
+- **One-off override:** `E2E_ALLOW_PROD=1 npx playwright test …` — this pollutes
+  real bells. Clean residue afterwards (notifications whose `href` points at a
+  now-deleted task/invoice/offer, for non-`@example.com` owners):
+
+```sql
+delete from public.notifications n using public.profiles p
+where p.id = n.user_id and p.email not like '%@example.com'
+  and ( (n.type like 'task_%'    and not exists (select 1 from public.tasks t    where '/tasks/'||t.id = n.href))
+     or (n.type like 'invoice_%' and not exists (select 1 from public.invoices i where '/invoices/'||i.id = n.href))
+     or (n.type like 'offer_%'   and not exists (select 1 from public.offers o   where '/offers/'||o.id = n.href)) );
+```
+
 ## Logging convention
 
 Server actions/routes log failures as
