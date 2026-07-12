@@ -186,6 +186,29 @@ async function main() {
     });
     const { data: anonSubs } = await anonClient.from("push_subscriptions").select("id").limit(1);
     assert((anonSubs?.length ?? 0) === 0, "anon SELECT push_subscriptions returns 0 rows");
+
+    // ── Financial push isolation (migrations 0022 + 0029) ──
+    // Web Push (0029) forwards notification ROWS as-is; financial rows are only
+    // ever created for manager/accountant (notify_invoice_event, 0022). So the
+    // load-bearing invariant is: no engineer OWNS a financial notification — if
+    // that holds, a financial push can never reach an engineer. Assert it across
+    // ALL live data (read-only). (A behavioural proof — fire an invoice event,
+    // confirm engineers get 0 recipients — can't run against a live project
+    // because notify_invoice_event notifies every real manager/accountant; it is
+    // verified in a rolled-back transaction during release checks instead.)
+    const { data: engRows } = await admin.from("profiles").select("id").eq("role", "engineer");
+    const engIds = (engRows ?? []).map((r) => r.id);
+    if (engIds.length > 0) {
+      const { data: engFin } = await admin
+        .from("notifications")
+        .select("id")
+        .like("type", "invoice_%")
+        .in("user_id", engIds);
+      assert(
+        (engFin?.length ?? 0) === 0,
+        "no engineer owns any invoice_* notification (financial push isolation)",
+      );
+    }
   } finally {
     if (tmpProjectId) await admin.from("projects").delete().eq("id", tmpProjectId);
     if (tmpClientId) await admin.from("clients").delete().eq("id", tmpClientId);
