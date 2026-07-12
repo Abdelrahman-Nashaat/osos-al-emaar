@@ -18,6 +18,8 @@ let mgrId = "";
 let engId = "";
 let clientId = "";
 let projectId = "";
+let invoiceId = "";
+const invoiceNumber = `MOB-${ts}`;
 
 async function seedUser(u: { email: string; password: string; name: string }, role: string) {
   const created = await admin.auth.admin.createUser({
@@ -46,9 +48,26 @@ test.beforeAll(async () => {
     .select("id")
     .single();
   projectId = p?.id ?? "";
+
+  const { data: inv } = await admin
+    .from("invoices")
+    .insert({
+      client_id: clientId,
+      project_id: projectId,
+      invoice_number: invoiceNumber,
+      status: "sent",
+      subtotal: 1000,
+      total: 1000,
+      issue_date: new Date(ts).toISOString().slice(0, 10),
+      created_by: mgrId,
+    })
+    .select("id")
+    .single();
+  invoiceId = inv?.id ?? "";
 });
 
 test.afterAll(async () => {
+  if (invoiceId) await admin.from("invoices").delete().eq("id", invoiceId);
   if (projectId) await admin.from("projects").delete().eq("id", projectId);
   if (clientId) await admin.from("clients").delete().eq("id", clientId);
   for (const id of [mgrId, engId]) {
@@ -143,6 +162,34 @@ test("quick-add FAB: a view-only engineer sees no quick-add (no create perms) @m
 }) => {
   await loginAs(page, eng.email, eng.password);
   await expect(page.getByRole("button", { name: "إضافة سريعة" })).toHaveCount(0);
+});
+
+test("share button on an invoice invokes the native share sheet (no amounts leaked)", async ({
+  page,
+}) => {
+  // Stub the Web Share API so headless Chromium takes the navigator.share path
+  // and records what the button would hand to the OS share sheet.
+  await page.addInitScript(() => {
+    (window as unknown as { __shared: unknown }).__shared = null;
+    (navigator as unknown as { share: (d: unknown) => Promise<void> }).share = (d) => {
+      (window as unknown as { __shared: unknown }).__shared = d;
+      return Promise.resolve();
+    };
+  });
+  await loginManager(page);
+  await page.goto(`/invoices/${invoiceId}`);
+  await expect(page.getByRole("heading", { name: invoiceNumber })).toBeVisible();
+  await page.getByRole("button", { name: "مشاركة" }).click();
+  const shared = (await page.evaluate(() => (window as unknown as { __shared: unknown }).__shared)) as {
+    title?: string;
+    text?: string;
+    url?: string;
+  } | null;
+  expect(shared?.title).toContain(invoiceNumber);
+  expect(String(shared?.url)).toContain(`/invoices/${invoiceId}`);
+  // The share payload must never carry a financial figure — only office context.
+  expect(shared?.text ?? "").toContain("فاتورة من");
+  expect(shared?.text ?? "").not.toContain("1000");
 });
 
 test("notifications panel shows the push enable toggle @pwa", async ({ page }) => {

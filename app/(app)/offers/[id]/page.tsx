@@ -17,6 +17,7 @@ import { PrintLetterhead } from "@/components/print/letterhead";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PrintButton } from "../../invoices/print-button";
+import { ShareButton } from "@/components/share-button";
 import { OfferStatusBadge } from "../offer-status-badge";
 import { OfferActions } from "../offer-actions";
 import { OfferFormDialog } from "../offer-form";
@@ -95,7 +96,14 @@ export default async function OfferDetailPage({ params }: { params: Promise<{ id
             </div>
             <p className="text-sm text-muted-foreground">{offer.title}</p>
           </div>
-          <PrintButton label="طباعة العرض / PDF" />
+          <div className="flex items-center gap-2">
+            <ShareButton
+              title={`عرض ${offer.offer_number}`}
+              text={`عرض سعر من ${office.office_name}`}
+              url={`/offers/${offer.id}`}
+            />
+            <PrintButton label="طباعة العرض / PDF" />
+          </div>
         </div>
 
         <Card>
