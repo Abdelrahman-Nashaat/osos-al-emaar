@@ -103,6 +103,22 @@ test("manifest exposes install metadata + shortcuts", async ({ request }) => {
   expect(Array.isArray(m.screenshots)).toBeTruthy();
 });
 
+test("public /install page is reachable without login and shows the guide", async ({ page }) => {
+  await page.goto("/install");
+  // Must NOT be bounced to /login — it's a public shareable landing.
+  await expect(page).toHaveURL(/\/install$/);
+  await expect(page.getByRole("img", { name: /رمز QR/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: "فتح التطبيق في المتصفّح" })).toBeVisible();
+});
+
+test("login page links to the public install page", async ({ page }) => {
+  await page.goto("/login");
+  const link = page.getByRole("link", { name: "تثبيت التطبيق على الجوال" });
+  await expect(link).toBeVisible();
+  await link.click();
+  await expect(page).toHaveURL(/\/install$/);
+});
+
 test("push dispatch route rejects unauthenticated callers", async ({ request }) => {
   // Security guard: the dispatch route must NEVER process a notification without
   // the shared bearer secret. A missing/wrong Authorization header must be
